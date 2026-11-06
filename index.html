@@ -29,13 +29,15 @@
   <div class="songbar">
     <span class="songlabel">曲：</span><span id="songTitle" class="songtitle">（まだ選んでいません）</span>
     <button class="b openbtn" id="openBtn">曲を開く</button>
-    <input type="file" id="file" accept=".json,application/json" hidden>
+    <!-- iPhone で .mxl が選べなくならないように、種類はしぼらない（中身で見分ける） -->
+    <input type="file" id="file" hidden>
   </div>
 
   <div id="err" class="err" role="alert" hidden></div>
+  <div id="notice" class="notice" role="status" hidden></div>
 
   <div id="empty" class="empty">
-    <p>曲ファイル（.json）を選んでください。</p>
+    <p>曲ファイル（.json）か、楽譜ファイル（.mxl）を選んでください。</p>
     <p class="sub">一度開いた曲は、次からは自動で出ます。</p>
     <button class="b big" id="openBtn2">曲ファイルを選ぶ</button>
     <p class="sub trysub">曲ファイルがまだないときは、こちらで試せます。</p>
@@ -73,7 +75,8 @@
   <div class="dlghead"><h2 id="helpTitle">使い方</h2><button class="close" aria-label="閉じる">閉じる</button></div>
   <div class="dlgbody">
     <h3>曲を開く</h3>
-    <p>「曲を開く」を押して、曲ファイル（.json）を選びます。一度開いた曲は、次にアプリを開いたときにも出ます。</p>
+    <p>「曲を開く」を押して、曲ファイル（.json）か、MuseScore で書き出した楽譜ファイル（.mxl / .musicxml）を選びます。一度開いた曲は、次にアプリを開いたときにも出ます。</p>
+    <p>楽譜ファイルに、読み取りミスかもしれない所があると、開いたときに知らせます。小節の番号に「!」が付いた小節を選ぶと、理由（確認メモ）が出ます。MuseScore で直して書き出し直し、もう一度開くと消えます。</p>
     <p>ホーム画面のアイコンから開いたときと、Safari で開いたときでは、覚えている曲が別々です。ふだんはホーム画面のアイコンから開いてください。</p>
     <p>曲ファイルがないときは、お試しの曲で動きを試せます（覚えている曲は変わりません）。</p>
     <p><button class="b mid" id="helpSampleBtn">お試しの曲を開く</button></p>
@@ -83,7 +86,7 @@
       <li><b>場所</b>：セクション（イントロ・A など）を選んでから、小節の番号を選びます。</li>
       <li><b>テンポ</b>：はじめは「ゆっくり（半分）」がおすすめです。</li>
       <li><b>再生のしかた</b>：「この小節だけ」はその小節をくり返します。「ここから最後まで」は選んだ小節から、「最初から全曲」は曲の頭から弾きます。</li>
-      <li><b>表示</b>：楽譜とリズム図を、出したり隠したりできます。</li>
+      <li><b>表示</b>：楽譜・リズム図・ヒントを、出したり隠したりできます。ヒントは、黒い鍵盤・3連符・速さの変化・楽譜の言葉の意味などを、小節ごとに自動で出します。</li>
       <li><b>大きさ</b>：鍵盤・楽譜・リズム図の大きさを、20〜100 の数字で変えられます。</li>
     </ol>
     <p>「再生」を押すと、カッチ・カッチと1小節分数えてから始まります。もう一度押すと止まります。</p>

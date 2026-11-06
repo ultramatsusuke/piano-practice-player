@@ -9,6 +9,8 @@ import { Player } from './player.js';
 import * as audio from './audio.js';
 import { saveLastSong, loadLastSong } from './storage.js';
 import { VERSION, CHANGELOG } from './version.js';
+import { readSongFile } from './importer.js';
+import { hintsFor } from './hints.js';
 
 const HN = { both: '両手', R: '右手のみ', L: '左手のみ' };
 const MN = { bar: 'この小節をくり返す', from: 'ここから最後まで', all: '最初から全曲' };
@@ -32,6 +34,7 @@ const state = {
   shown: 0, // 表示している小節（index）
   showScore: true,
   showRhythm: true,
+  showHints: true,
   SZ: { kb: 50, score: 50, rhythm: 50 },
 };
 
@@ -83,8 +86,12 @@ function idleInfo(mi) {
   const l1 = lyr(m, 1);
   if (l1 && state.hand !== 'L') h += `<div>歌詞${m.hasVerse2 ? '（1番）' : ''}：${esc(l1)}</div>`;
   if (m.hasVerse2 && state.hand !== 'L') h += `<div>歌詞（2番）：${esc(lyr(m, 2))}</div>`;
-  if (m.memo) h += `<div style="color:var(--text-secondary);font-size:14px">${esc(m.memo)}</div>`;
-  if (m.warn) h += `<div style="color:var(--text-secondary);font-size:13px">確認メモ：${esc(m.warn)}</div>`;
+  if (state.showHints) {
+    if (m.memo) h += `<div class="hint">${esc(m.memo)}</div>`;
+    for (const t of hintsFor(state.song, mi, state.hand)) h += `<div class="hint">・${esc(t)}</div>`;
+  }
+  // 確認メモ（読み取りミスかもしれない所）は、ヒントを隠しても出す
+  if (m.warn) h += `<div style="color:var(--text-warn);font-size:13px;margin-top:2px">確認メモ：${esc(m.warn)}</div>`;
   $('info').innerHTML = h;
 }
 
@@ -202,7 +209,11 @@ let chipBtns = [];
 const sizeInputs = {};
 
 function updateChips() {
-  chipBtns.forEach((o) => (o.el.className = 'b' + (o.v === state.shown ? ' on' : '')));
+  chipBtns.forEach((o) => {
+    const warn = !!state.song.measures[o.v].warn;
+    o.el.className = 'b' + (o.v === state.shown ? ' on' : '') + (warn ? ' wn' : '');
+    o.el.setAttribute('aria-label', `${state.song.measures[o.v].number}小節目${warn ? '（確認メモあり）' : ''}`);
+  });
 }
 function updateSecs() {
   const cs = secOf(state.barSel);
@@ -222,7 +233,7 @@ function updateModes() {
 }
 function updateViews() {
   viewBtns.forEach((o) => {
-    const on = o.v === 'score' ? state.showScore : state.showRhythm;
+    const on = o.v === 'score' ? state.showScore : o.v === 'rhythm' ? state.showRhythm : state.showHints;
     o.el.className = 'b' + (on ? ' on' : '');
   });
 }
@@ -273,11 +284,13 @@ function buildStaticControls() {
     updateModes();
     updateSum();
   });
-  viewBtns = mkBtns('views', [{ t: '楽譜', v: 'score' }, { t: 'リズム図', v: 'rhythm' }], (v) => {
+  viewBtns = mkBtns('views', [{ t: '楽譜', v: 'score' }, { t: 'リズム図', v: 'rhythm' }, { t: 'ヒント', v: 'hints' }], (v) => {
     if (v === 'score') state.showScore = !state.showScore;
-    else state.showRhythm = !state.showRhythm;
+    else if (v === 'rhythm') state.showRhythm = !state.showRhythm;
+    else state.showHints = !state.showHints;
     $('wSC').style.display = state.showScore ? '' : 'none';
     $('wTL').style.display = state.showRhythm ? '' : 'none';
+    if (v === 'hints' && state.song && !player.playing) idleInfo(state.shown);
     updateViews();
   });
 
@@ -361,6 +374,7 @@ function openSongText(text, fileName, save) {
   $('empty').hidden = true;
   $('main').hidden = false;
   showError('');
+  $('notice').hidden = true;
   secBtns = mkBtns('secs', song.sections.map((s, i) => ({ t: s.name, v: i })), (i) => {
     if (player.playing) stopPlay();
     state.barSel = state.song.sections[i].from;
@@ -375,18 +389,57 @@ function openSongText(text, fileName, save) {
   if (save) saveLastSong({ fileName, text });
 }
 
-function onFileChosen(file) {
-  file.text().then(
-    (text) => {
-      try {
-        openSongText(text, file.name, true);
-      } catch (e) {
-        showError(e instanceof SongError ? e.message : '曲ファイルを開けませんでした。');
-        if (!(e instanceof SongError)) console.error(e);
-      }
-    },
-    () => showError('ファイルを読み込めませんでした。もう一度選んでください。'),
-  );
+/** 楽譜ファイルから開いたとき、確かめたほうがよい所をまとめて知らせる */
+function showNotice() {
+  const song = state.song;
+  const marked = song.measures.filter((m) => m.warn).map((m) => String(m.number));
+  const box = $('notice');
+  box.replaceChildren();
+  if (!marked.length && !song.warnings.length) {
+    box.hidden = true;
+    return;
+  }
+  const head = document.createElement('div');
+  head.className = 'nhead';
+  const ht = document.createElement('span');
+  ht.textContent = '楽譜ファイルから開きました。確かめたほうがよい所があります。';
+  const close = document.createElement('button');
+  close.className = 'close';
+  close.textContent = '閉じる';
+  close.onclick = () => (box.hidden = true);
+  head.append(ht, close);
+  const ul = document.createElement('ul');
+  if (marked.length) {
+    const li = document.createElement('li');
+    const shown = marked.slice(0, 12).join('・');
+    li.textContent = `小節：${shown}${marked.length > 12 ? ` ほか${marked.length - 12}か所` : ''}（番号に「!」が付いています。選ぶと理由が出ます）`;
+    ul.appendChild(li);
+  }
+  for (const w of song.warnings) {
+    const li = document.createElement('li');
+    li.textContent = w;
+    ul.appendChild(li);
+  }
+  box.append(head, ul);
+  box.hidden = false;
+}
+
+async function onFileChosen(file) {
+  let bytes;
+  try {
+    bytes = new Uint8Array(await file.arrayBuffer());
+  } catch {
+    showError('ファイルを読み込めませんでした。もう一度選んでください。');
+    return;
+  }
+  try {
+    const { text, fromScore } = await readSongFile(bytes, file.name);
+    openSongText(text, file.name, true);
+    if (fromScore) showNotice();
+  } catch (e) {
+    showError(e instanceof SongError ? e.message : 'ファイルを開けませんでした。曲ファイル（.json）か楽譜ファイル（.mxl）を選んでください。');
+    if (!(e instanceof SongError)) console.error(e);
+  }
 }
 
 /** お試しの曲（自作）を開く。覚えている曲は変えない */
@@ -459,7 +512,9 @@ export async function init() {
   if (params.get('song') && ['localhost', '127.0.0.1'].includes(location.hostname)) {
     try {
       const res = await fetch(params.get('song'));
-      openSongText(await res.text(), params.get('song'), false);
+      const { text, fromScore } = await readSongFile(new Uint8Array(await res.arrayBuffer()), params.get('song'));
+      openSongText(text, params.get('song'), false);
+      if (fromScore) showNotice();
       return;
     } catch (e) {
       console.error(e);

@@ -5,6 +5,8 @@ songs/
 *.mxl
 *.pdf
 *.heic
+# ただし、テスト用の自作の短い楽譜だけは入れる
+!tests/fixtures/*.musicxml
 
 # Claude Code の個人設定
 .claude/settings.local.json

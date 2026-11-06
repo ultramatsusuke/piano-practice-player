@@ -182,11 +182,16 @@ export function buildSchedule(song, order, ratio) {
 }
 
 /**
- * カウントイン（1小節分の拍）
+ * カウントイン（1小節分の拍）。弱起の小節から始めるときは、1小節分＋足りない拍の分を数える。
  * @param {Measure} m
  * @param {number} ratio
+ * @returns {{beats:number, beatMs:number, countMs:number, perBar:number}}
+ *   beats: カチッと鳴らす回数、countMs: 数え始めから曲の頭までの時間、perBar: 1小節の拍の数
  */
 export function countIn(m, ratio) {
   const beatMs = (60000 / (m.tempo * ratio)) * (4 / m.time[1]);
-  return { beats: m.time[0], beatMs };
+  const perBar = m.time[0];
+  const missing = m.lengthTicks < m.fullTicks ? ((m.fullTicks - m.lengthTicks) / m.fullTicks) * perBar : 0;
+  const lead = perBar + missing;
+  return { beats: Math.ceil(lead - 1e-9), beatMs, countMs: lead * beatMs, perBar };
 }

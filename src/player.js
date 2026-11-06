@@ -29,7 +29,7 @@ export class Player {
     const sch = buildSchedule(song, order, ratio);
     const items = sch.items;
     const ci = countIn(song.measures[order[0].mi], ratio);
-    const countMs = ci.beats * ci.beatMs;
+    const countMs = ci.countMs;
     const a = audio.ctx();
     const songT0 = a.currentTime + 0.08 + countMs / 1000; // 曲の頭の時刻（秒）
 
@@ -87,7 +87,8 @@ export class Player {
       const pos = (a.currentTime - songT0) * 1000;
       pump(pos);
       if (pos < 0) {
-        o.onCount(Math.min(ci.beats, Math.max(1, Math.floor((pos + countMs) / ci.beatMs) + 1)));
+        const b = Math.min(ci.beats, Math.max(1, Math.floor((pos + countMs) / ci.beatMs) + 1));
+        o.onCount(((b - 1) % ci.perBar) + 1);
       } else {
         if (!loop && pos >= sch.totalMs) {
           // 最後の音は自然に鳴り終わらせる

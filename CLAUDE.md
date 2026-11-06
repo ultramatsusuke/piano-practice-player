@@ -7,8 +7,8 @@ iPhone の Safari で開き、「ホーム画面に追加」して使う。App S
 
 1. 楽譜を iPhone の「書類をスキャン」で撮る（PDF）
 2. Windows PC の **Audiveris** で MusicXML に変換する
-3. **MuseScore** で読み取りミスを人が直す（アプリ側に修正画面は作らない）
-4. iPhone のアプリで、そのファイルを選んで読み込む（端末内に保存）
+3. **MuseScore**（PC 版。スマホ版は閲覧用で直せない）で読み取りミスを人が直し、`.mxl` で書き出す（アプリ側に修正画面は作らない）
+4. iCloud Drive などで iPhone に渡し、アプリの「曲を開く」で選ぶ。**変換はアプリの中で行う**（端末内に保存）
 
 アプリが担うのは「曲データを読み込んで、練習画面に表示・再生する」ところだけ。
 
@@ -28,6 +28,9 @@ iPhone の Safari で開き、「ホーム画面に追加」して使う。App S
 - 使い方ボタン（モーダル）とバージョン表示＋変更履歴（`src/version.js` の `CHANGELOG`）を置く。
 - ファイル名・URL にバージョンは入れない（ホーム画面のアイコンが古い版を開かないように、URL は固定）。
 - 鍵盤は1枚の SVG に描く（両手のときは上下2段）。
+- 楽譜ファイルのおかしな所は、**開いたうえで確認メモを出す**（開いたときにまとめて知らせ、小節番号に「!」、小節を選ぶと理由）。止めない。
+- セクションは「練習番号（MuseScore で好きな名前を付けられる）→ リピート記号・二重線 → 8小節ごと」の順で区切る。
+- 小節ヒントは自動で出す（楽譜の言葉の訳・黒い鍵盤・リズムの注意・速さ／拍子の変化）。「表示」の「ヒント」でオン・オフ（初期はオン）。確認メモはヒントを隠しても出す。
 
 ## 進め方の決まり
 
@@ -47,8 +50,13 @@ samples/      お試しの曲（自作）。曲ファイルがなくても動き
 src/
   version.js    VERSION と CHANGELOG
   pitch.js      音名 ⇔ MIDI、ドレミ名、五線上の位置、臨時記号
-  song.js       曲 JSON の検査と正規化（エラーはやさしい日本語）
-  timeline.js   リピート展開、テンポ表、フェルマータ、ms の予定表
+  song.js       曲 JSON の検査と正規化（エラーはやさしい日本語）、鍵盤の範囲の自動決定
+  xml.js        小さな XML パーサー（DOMParser を使わないので Node のテストでも同じに動く）
+  mxl.js        .mxl（ZIP）の展開（DecompressionStream。iOS 16.4 以降）
+  musicxml.js   MusicXML → 曲 JSON（確認メモ・セクション分けもここ）
+  importer.js   選んだファイルを中身で見分けて（ZIP / XML / JSON）曲 JSON にする
+  hints.js      小節ヒント（楽譜の言葉の訳など）
+  timeline.js   リピート展開、テンポ表、フェルマータ、ms の予定表、カウントイン
   keyboard.js / score.js / rhythm.js   鍵盤・楽譜・リズム図の SVG
   audio.js      三角波の音、クリック、iPhone 対策（音の有効化・マナーモード）
   player.js     再生ループ
@@ -58,6 +66,7 @@ tests/          node:test。fixtures/ は自作の短い曲だけ
 tools/
   serve.mjs        ローカル確認用サーバー（依存なし）
   make-icons.mjs   アイコン PNG を作る（依存なし）
+  musicxml-to-json.mjs  楽譜ファイル → 曲 JSON を PC で（アプリと同じ処理。確認メモも表示）
   v07-extract.mjs  v0.7.0 の HTML からデータ部分を取り出す
   convert-v07.mjs  v0.7.0 → 曲 JSON 変換
 private/        （git 管理外）v0.7.0 の HTML、元の引き継ぎメモ、曲 JSON
@@ -69,6 +78,8 @@ private/        （git 管理外）v0.7.0 の HTML、元の引き継ぎメモ、
 - ローカル確認：`node tools/serve.mjs` → http://localhost:8080/
 - v0.7.0 → JSON 変換：`node tools/convert-v07.mjs`（`private/songs/jiyuu-e-no-tobira.json` を書き出す）
 - アイコンを作り直す：`node tools/make-icons.mjs`（`icons/` に PNG を書き出す）
+- 楽譜ファイル → 曲 JSON：`node tools/musicxml-to-json.mjs 入力.mxl [出力.json]`（省くと `private/songs/` に書く）
+- ブラウザで楽譜ファイルを試す（localhost のみ）：`http://localhost:8080/?song=tests/fixtures/score-basic.musicxml`
 
 ## 曲データ形式（JSON, formatVersion 1）
 
@@ -85,9 +96,12 @@ private/        （git 管理外）v0.7.0 の HTML、元の引き継ぎメモ、
     "time": [4,4], "key": -1, "tempo": 108,   // 変わる小節にだけ書く（key は ♭ならマイナス、♯ならプラスの数）
     "repeatStart": true, "repeatEnd": true, "ending": [1],   // リピート・番号かっこ
     "chords": [{ "t": 0, "name": "C" }],      // コード名（表示用）
+    "ticks": 480,                             // 任意。拍子と長さが違う小節（弱起など）の実際の長さ
+    "directions": [{ "t": 0, "text": "rit." }],   // 任意。楽譜の言葉・強弱（p、＜、＞ など）。ヒントで訳す
     "memo": "小節のヒント", "warn": "確認メモ",   // 任意
     "rh": [ /* 右手のイベント */ ], "lh": [ /* 左手のイベント */ ]
-  }]
+  }],
+  "warnings": ["ピアノ以外の段（Voice）は使っていません。"]   // 任意。曲全体の確認メモ
 }
 ```
 
@@ -97,15 +111,26 @@ private/        （git 管理外）v0.7.0 の HTML、元の引き継ぎメモ、
 - フェルマータは、その音がかかっている区間の時間を2倍にのばす（両手とも）。
 - 演奏順はリピート記号からプレーヤーが計算し、何回目の通りかで歌詞の番を選ぶ。
 - 臨時記号は、調号と違う音に毎回付ける（初心者向け）。
+- `display` がなければ、鍵盤の範囲は手ごとに曲の音から決める（±2半音の余裕、最低2オクターブ、両はしは白鍵）。
+- 1小節目が拍子より短ければ弱起。カウントインは「1小節分＋足りない拍」。
+
+### MusicXML からの変換（`src/musicxml.js`）
+
+- 段が2つあるパート（名前が Piano なども優先）を使う。staff 1 → 右手、staff 2 → 左手。ほかのパート・3段目以降は使わず、`warnings` に書く。
+- 同じ手で「始まりと長さが同じ音」を1つのイベント（和音）にまとめる。装飾音（grace）は鳴らさない。歌詞は右手だけ。
+- テンポは `<sound tempo>` → `<metronome>` の順。どこにもなければ ♩=100 にして1小節目に確認メモ。曲の途中で最初のテンポが出てきたら、1小節目にもそれを使う。
+- 小節の長さが拍子と合わなければ確認メモ（弱起・最後の小節が弱起の残りのときは除く）。長いときは `ticks` を書いて全部鳴らす。
+- 小節番号は、数字で増えていくならそのまま。そうでなければ振り直す。
+- D.C.・D.S.・Coda などの戻る／飛ぶ記号は再生に使わず、`warnings` で知らせる。
 
 ## フェーズ
 
 - **フェーズ1（v0.8.0）**：曲データとプレーヤーの分離。曲ファイルを開く・最後の曲を覚える。お試しの曲。ホーム画面用のアイコンと全画面表示（manifest）。GitHub Pages で公開し、iPhone で試す。
-- **フェーズ2**：MusicXML（`.musicxml` / `.mxl`）→ 曲 JSON 変換。staff 1 → 右手、staff 2 → 左手。divisions → tick、chord、tie、lyric、3連符、repeat/ending、tempo、fermata、fingering。4/4 以外の拍子。鍵盤の表示範囲を曲の音域から自動で決める。
+- **フェーズ2（v0.9.0）**：MusicXML（`.musicxml` / `.mxl`）をアプリの中で曲 JSON に変換して開く。確認メモ、セクションの自動区切り、小節ヒント（オン・オフ）、鍵盤の範囲の自動決定、弱起。本物の楽譜（Audiveris → MuseScore）での確認は、PC にソフトを入れてから。
 - **フェーズ3**：オフライン対応（Service Worker）、曲一覧（IndexedDB）、練習していた小節・設定の復元。
 - **フェーズ4（任意）**：音色の改善（サンプル音源）、指番号の簡易自動割り当て。
 
 ## 未決事項
 
 - 練習中の iPhone の置き方（縦／横、譜面台に置いたときの操作）→ iPhone で試したあとに相談する。
-- MusicXML の曲に「小節ヒント」を自動で付けるか → フェーズ2で相談する。
+- 本物の楽譜を変換したときに出てくる問題（2声部の重なり方、Audiveris の読み取りのくせなど）→ 実際のファイルで試してから直す。

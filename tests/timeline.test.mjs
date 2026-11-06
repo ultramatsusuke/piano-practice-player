@@ -73,6 +73,9 @@ test('tick と ms の変換は行き来できる', () => {
 });
 
 test('カウントイン', () => {
-  assert.deepEqual(countIn(song.measures[0], 1), { beats: 3, beatMs: 500 });
-  assert.deepEqual(countIn(song.measures[0], 0.5), { beats: 3, beatMs: 1000 });
+  assert.deepEqual(countIn(song.measures[0], 1), { beats: 3, beatMs: 500, countMs: 1500, perBar: 3 });
+  assert.deepEqual(countIn(song.measures[0], 0.5), { beats: 3, beatMs: 1000, countMs: 3000, perBar: 3 });
+  // 弱起（3拍子で1拍だけの小節）：1小節分＋足りない2拍を数える
+  const pickup = { ...song.measures[0], lengthTicks: 480 };
+  assert.deepEqual(countIn(pickup, 1), { beats: 5, beatMs: 500, countMs: 2500, perBar: 3 });
 });

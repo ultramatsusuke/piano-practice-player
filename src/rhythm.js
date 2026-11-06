@@ -33,20 +33,27 @@ export function drawRhythm(svg, song, m, hand) {
   const bottom = T ? (Bs ? 130 : 96) : 54;
   svg.setAttribute('viewBox', `0 0 380 ${bottom + 10}`);
 
-  // 上の拍の数字（4分の拍子なら 1 & 2 & …）
+  // 上の拍の数字（4分の拍子なら 1 & 2 & …）。弱起の小節は、足りない拍の分だけ数字をずらす
   const per = 8 / m.time[1]; // 1拍が8分音符いくつ分か
+  const off = (m.fullTicks - m.lengthTicks) / E;
+  const near = (x) => Math.abs(x - Math.round(x)) < 1e-6;
   for (let i = 0; i < n; i++) {
+    const j = i + off;
+    if (!near(j)) continue;
+    const jj = Math.round(j);
     let label = '';
     let w = 400;
-    if (per < 1) label = String(i + 1);
-    else if (i % per === 0) {
-      label = String(i / per + 1);
+    if (per < 1) label = String(jj + 1);
+    else if (jj % per === 0) {
+      label = String(jj / per + 1);
       w = 500;
     } else if (per === 2) label = '&';
     if (label) tx(svg, TX + i * U + U / 2, 9, 11, 'var(--text-muted)', label, w);
   }
   const step = Math.max(1, per);
-  for (let k = 0; k <= n + 1e-9; k += step) {
+  for (let k = 0; k <= n + 1e-9; k += 1) {
+    const j = k + off;
+    if (k > 0 && k < n - 1e-9 && !(near(j) && Math.round(j) % step === 0)) continue;
     mk(svg, 'line', { x1: TX + k * U, x2: TX + k * U, y1: 14, y2: bottom, stroke: 'var(--border)', 'stroke-width': 0.5 });
   }
 

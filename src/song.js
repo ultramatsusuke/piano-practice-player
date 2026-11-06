@@ -1,10 +1,10 @@
 // 曲データ（JSON, formatVersion 1）の検査と、プレーヤーで使いやすい形への変換
-import { parsePitch } from './pitch.js';
+import { parsePitch, isBlack } from './pitch.js';
 
 export const FORMAT = 'piano-practice-song';
 export const FORMAT_VERSION = 1;
 
-const DEFAULT_RH = [57, 77]; // A3〜F5（v0.7.0 と同じ）
+const DEFAULT_RH = [57, 77]; // A3〜F5（v0.7.0 と同じ）。その手の音がないときに使う
 const DEFAULT_LH = [36, 62]; // C2〜D4
 
 /** 曲ファイルが読めないときのエラー（message はそのまま画面に出す） */
@@ -28,7 +28,10 @@ const HAND_NAME = { rh: '右手', lh: '左手' };
  * @property {[number, number]} time
  * @property {number} key
  * @property {number} tempo  4分音符の bpm
- * @property {number} lengthTicks
+ * @property {number} lengthTicks  この小節の長さ（弱起などで拍子より短いことがある）
+ * @property {number} fullTicks    拍子どおりの長さ
+ * @property {boolean} pickup      1小節目が拍子より短い（弱起）
+ * @property {{t:number, text:string}[]} directions  楽譜に書いてある言葉（rit.、p など）
  * @property {boolean} repeatStart
  * @property {boolean} repeatEnd
  * @property {number[]|null} ending
@@ -44,6 +47,7 @@ const HAND_NAME = { rh: '右手', lh: '左手' };
  * @property {{rh:[number,number], lh:[number,number]}} range
  * @property {{name:string, from:number, to:number}[]} sections  小節の index で持つ
  * @property {Measure[]} measures
+ * @property {string[]} warnings  曲全体の確認メモ（楽譜ファイルから変換したときなど）
  */
 
 /**
@@ -102,7 +106,15 @@ export function normalizeSong(raw) {
       if (!(Number(m.tempo) > 0)) throw new SongError(`${label}のテンポが読めません。`);
       tempo = Number(m.tempo);
     }
-    const lengthTicks = Math.round((tpq * 4 * time[0]) / time[1]);
+    const fullTicks = Math.round((tpq * 4 * time[0]) / time[1]);
+    let lengthTicks = fullTicks;
+    if (m.ticks !== undefined) {
+      if (!Number.isInteger(m.ticks) || m.ticks <= 0) throw new SongError(`${label}の長さ（ticks）が読めません。`);
+      lengthTicks = m.ticks;
+    }
+    const directions = Array.isArray(m.directions)
+      ? m.directions.filter((d) => d && typeof d.text === 'string' && d.text).map((d) => ({ t: Number(d.t) || 0, text: d.text }))
+      : [];
     const rh = normalizeEvents(m.rh, `${label}の${HAND_NAME.rh}`);
     const lh = normalizeEvents(m.lh, `${label}の${HAND_NAME.lh}`);
     const chords = Array.isArray(m.chords)
@@ -115,6 +127,9 @@ export function normalizeSong(raw) {
       key,
       tempo,
       lengthTicks,
+      fullTicks,
+      pickup: index === 0 && lengthTicks < fullTicks,
+      directions,
       repeatStart: !!m.repeatStart,
       repeatEnd: !!m.repeatEnd,
       ending: Array.isArray(m.ending) && m.ending.length ? m.ending.map(Number) : null,
@@ -129,8 +144,8 @@ export function normalizeSong(raw) {
 
   const display = raw.display || {};
   const range = {
-    rh: parseRange(display.rhRange) || DEFAULT_RH,
-    lh: parseRange(display.lhRange) || DEFAULT_LH,
+    rh: parseRange(display.rhRange) || autoRange(measures, 'rh') || DEFAULT_RH,
+    lh: parseRange(display.lhRange) || autoRange(measures, 'lh') || DEFAULT_LH,
   };
 
   const findFirst = (num) => measures.findIndex((m) => String(m.number) === String(num));
@@ -151,7 +166,41 @@ export function normalizeSong(raw) {
     range,
     sections,
     measures,
+    warnings: Array.isArray(raw.warnings) ? raw.warnings.filter((w) => typeof w === 'string' && w) : [],
   };
+}
+
+/**
+ * 鍵盤の表示範囲を、その手の一番低い音〜一番高い音から決める。
+ * 少し余裕をとり、2オクターブより狭ければ広げ、両はしは白鍵にする。その手の音がなければ null。
+ * @param {Measure[]} measures
+ * @param {'rh'|'lh'} hand
+ * @returns {[number, number]|null}
+ */
+export function autoRange(measures, hand) {
+  let lo = Infinity;
+  let hi = -Infinity;
+  for (const m of measures) {
+    for (const ev of m[hand]) {
+      for (const n of ev.notes) {
+        lo = Math.min(lo, n.midi);
+        hi = Math.max(hi, n.midi);
+      }
+    }
+  }
+  if (!Number.isFinite(lo)) return null;
+  lo -= 2;
+  hi += 2;
+  if (hi - lo < 24) {
+    const add = 24 - (hi - lo);
+    lo -= Math.floor(add / 2);
+    hi += Math.ceil(add / 2);
+  }
+  lo = Math.max(21, lo); // ピアノの一番低いラ
+  hi = Math.min(108, hi); // 一番高いド
+  while (isBlack(lo)) lo--;
+  while (isBlack(hi)) hi++;
+  return [lo, hi];
 }
 
 function parseRange(r) {
