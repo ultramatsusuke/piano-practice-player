@@ -3,9 +3,16 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
+<!-- ホーム画面に追加したとき：アイコン・名前・全画面表示（Safari のバーを出さない） -->
 <meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="mobile-web-app-capable" content="yes">
 <meta name="apple-mobile-web-app-title" content="ピアノ練習">
-<meta name="theme-color" content="#fafaf8">
+<meta name="apple-mobile-web-app-status-bar-style" content="default">
+<meta name="theme-color" content="#fafaf8" media="(prefers-color-scheme: light)">
+<meta name="theme-color" content="#1a1a18" media="(prefers-color-scheme: dark)">
+<link rel="manifest" href="manifest.webmanifest">
+<link rel="apple-touch-icon" href="icons/icon-180.png">
+<link rel="icon" type="image/png" href="icons/icon-192.png">
 <title>ピアノ練習プレーヤー</title>
 <link rel="stylesheet" href="styles.css">
 <script type="module" src="src/main.js"></script>
@@ -31,6 +38,8 @@
     <p>曲ファイル（.json）を選んでください。</p>
     <p class="sub">一度開いた曲は、次からは自動で出ます。</p>
     <button class="b big" id="openBtn2">曲ファイルを選ぶ</button>
+    <p class="sub trysub">曲ファイルがまだないときは、こちらで試せます。</p>
+    <button class="b mid" id="sampleBtn">お試しの曲を開く</button>
   </div>
 
   <div id="main" hidden>
@@ -65,6 +74,9 @@
   <div class="dlgbody">
     <h3>曲を開く</h3>
     <p>「曲を開く」を押して、曲ファイル（.json）を選びます。一度開いた曲は、次にアプリを開いたときにも出ます。</p>
+    <p>ホーム画面のアイコンから開いたときと、Safari で開いたときでは、覚えている曲が別々です。ふだんはホーム画面のアイコンから開いてください。</p>
+    <p>曲ファイルがないときは、お試しの曲で動きを試せます（覚えている曲は変わりません）。</p>
+    <p><button class="b mid" id="helpSampleBtn">お試しの曲を開く</button></p>
     <h3>練習のしかた</h3>
     <ol>
       <li><b>弾く手</b>：両手・右手だけ・左手だけを選びます。選ばなかった手は画面から消えます。</li>

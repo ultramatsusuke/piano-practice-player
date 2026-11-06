@@ -61,6 +61,8 @@ button { font-family: inherit; -webkit-tap-highlight-color: transparent; cursor:
 .empty p { margin: 0 0 4px; font-size: 16px; }
 .empty .sub { font-size: 14px; color: var(--text-secondary); margin-bottom: 16px; }
 .b.big { flex: none; padding: 13px 24px; font-size: 16px; background: #185FA5; color: #fff; border-color: #185FA5; font-weight: 500; }
+.b.mid { flex: none; padding: 11px 20px; font-size: 15px; color: var(--text-primary); }
+.empty .trysub { margin: 24px 0 8px; }
 
 .sum { padding: 9px 12px; margin-bottom: 8px; border-radius: var(--radius); background: var(--bg-accent); border: 1px solid var(--border-accent); color: var(--text-accent); font-size: 14px; font-weight: 500; line-height: 1.5; }
 .info { min-height: 92px; margin: 6px 0 14px; padding: 10px 12px; border: 0.5px solid var(--border); border-radius: var(--radius); background: var(--surface-1); font-size: 15px; line-height: 1.6; color: var(--text-primary); }

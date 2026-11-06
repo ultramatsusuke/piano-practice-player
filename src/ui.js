@@ -389,6 +389,18 @@ function onFileChosen(file) {
   );
 }
 
+/** お試しの曲（自作）を開く。覚えている曲は変えない */
+async function openSample() {
+  try {
+    const res = await fetch('samples/sample-song.json', { cache: 'no-cache' });
+    if (!res.ok) throw new Error(`HTTP ${res.status}`);
+    openSongText(await res.text(), 'sample-song.json', false);
+  } catch (e) {
+    showError(e instanceof SongError ? e.message : 'お試しの曲を読み込めませんでした。インターネットにつながっているか確かめてください。');
+    if (!(e instanceof SongError)) console.error(e);
+  }
+}
+
 // ---------- モーダル ----------
 function buildModals() {
   $('verBtn').textContent = 'v' + VERSION;
@@ -431,6 +443,11 @@ export async function init() {
   const pick = () => fileInput.click();
   $('openBtn').onclick = pick;
   $('openBtn2').onclick = pick;
+  $('sampleBtn').onclick = openSample;
+  $('helpSampleBtn').onclick = () => {
+    /** @type {HTMLDialogElement} */ ($('helpDlg')).close();
+    openSample();
+  };
   fileInput.addEventListener('change', () => {
     const f = fileInput.files && fileInput.files[0];
     if (f) onFileChosen(f);

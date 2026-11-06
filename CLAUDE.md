@@ -16,7 +16,7 @@ iPhone の Safari で開き、「ホーム画面に追加」して使う。App S
 
 - 楽譜は市販品。**曲データ（MusicXML・写真・PDF・曲 JSON）はリポジトリにコミットしない。**
 - 公開リポジトリ（GitHub Pages）にはプレーヤーのコードだけを置く。
-- 曲データとその元になったファイルは `private/` に置く（`.gitignore` で除外済み）。テスト用の曲は、自作の短いものだけを `tests/fixtures/` に置く。
+- 曲データとその元になったファイルは `private/` に置く（`.gitignore` で除外済み）。テスト用の曲は、自作の短いものだけを `tests/fixtures/` に置く。アプリに入れる「お試しの曲」（`samples/`）も自作のものだけ。
 
 ## UI について本人が決めたこと（変えないこと）
 
@@ -41,6 +41,9 @@ iPhone の Safari で開き、「ホーム画面に追加」して使う。App S
 
 ```
 index.html  styles.css
+manifest.webmanifest   ホーム画面に追加したときの名前・全画面表示・アイコン
+icons/        アイコン PNG（tools/make-icons.mjs で作る。手で描かない）
+samples/      お試しの曲（自作）。曲ファイルがなくても動きを試せる
 src/
   version.js    VERSION と CHANGELOG
   pitch.js      音名 ⇔ MIDI、ドレミ名、五線上の位置、臨時記号
@@ -54,6 +57,7 @@ src/
 tests/          node:test。fixtures/ は自作の短い曲だけ
 tools/
   serve.mjs        ローカル確認用サーバー（依存なし）
+  make-icons.mjs   アイコン PNG を作る（依存なし）
   v07-extract.mjs  v0.7.0 の HTML からデータ部分を取り出す
   convert-v07.mjs  v0.7.0 → 曲 JSON 変換
 private/        （git 管理外）v0.7.0 の HTML、元の引き継ぎメモ、曲 JSON
@@ -64,6 +68,7 @@ private/        （git 管理外）v0.7.0 の HTML、元の引き継ぎメモ、
 - テスト：`node --test`
 - ローカル確認：`node tools/serve.mjs` → http://localhost:8080/
 - v0.7.0 → JSON 変換：`node tools/convert-v07.mjs`（`private/songs/jiyuu-e-no-tobira.json` を書き出す）
+- アイコンを作り直す：`node tools/make-icons.mjs`（`icons/` に PNG を書き出す）
 
 ## 曲データ形式（JSON, formatVersion 1）
 
@@ -95,9 +100,9 @@ private/        （git 管理外）v0.7.0 の HTML、元の引き継ぎメモ、
 
 ## フェーズ
 
-- **フェーズ1（v0.8.0）**：曲データとプレーヤーの分離。曲ファイルを開く・最後の曲を覚える。GitHub Pages で公開し、iPhone で試す。
+- **フェーズ1（v0.8.0）**：曲データとプレーヤーの分離。曲ファイルを開く・最後の曲を覚える。お試しの曲。ホーム画面用のアイコンと全画面表示（manifest）。GitHub Pages で公開し、iPhone で試す。
 - **フェーズ2**：MusicXML（`.musicxml` / `.mxl`）→ 曲 JSON 変換。staff 1 → 右手、staff 2 → 左手。divisions → tick、chord、tie、lyric、3連符、repeat/ending、tempo、fermata、fingering。4/4 以外の拍子。鍵盤の表示範囲を曲の音域から自動で決める。
-- **フェーズ3**：PWA 化（manifest・Service Worker・オフライン）、曲一覧（IndexedDB）、練習していた小節・設定の復元。
+- **フェーズ3**：オフライン対応（Service Worker）、曲一覧（IndexedDB）、練習していた小節・設定の復元。
 - **フェーズ4（任意）**：音色の改善（サンプル音源）、指番号の簡易自動割り当て。
 
 ## 未決事項
