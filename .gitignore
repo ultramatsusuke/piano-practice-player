@@ -1,0 +1,14 @@
+# 曲データ（市販楽譜）はコミットしない
+private/
+songs/
+*.musicxml
+*.mxl
+*.pdf
+*.heic
+
+# Claude Code の個人設定
+.claude/settings.local.json
+
+# OS
+Thumbs.db
+.DS_Store

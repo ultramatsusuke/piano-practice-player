@@ -1,0 +1,48 @@
+{
+ "format": "piano-practice-song",
+ "formatVersion": 1,
+ "title": "テスト用の短い曲（自作）",
+ "ticksPerQuarter": 480,
+ "display": { "rhRange": ["C4", "C6"], "lhRange": ["C2", "C4"] },
+ "sections": [{ "name": "A", "from": 1, "to": 2 }, { "name": "B", "from": 3, "to": 4 }],
+ "measures": [
+  {
+   "number": 1, "time": [3, 4], "key": 2, "tempo": 120, "repeatStart": true,
+   "chords": [{ "t": 0, "name": "D" }],
+   "memo": "くり返しの始まり",
+   "rh": [
+    { "t": 0, "d": 480, "notes": [{ "p": "D5", "f": 1 }], "ly": ["あ", "か"] },
+    { "t": 480, "d": 480, "notes": [{ "p": "F#5", "f": 3 }], "ly": ["い", "き"] },
+    { "t": 960, "d": 480, "notes": [{ "p": "A5", "f": 5 }], "ly": ["う", "く"] }
+   ],
+   "lh": [{ "t": 0, "d": 1440, "notes": [{ "p": "D3", "f": 5 }] }]
+  },
+  {
+   "number": 2, "ending": [1], "repeatEnd": true,
+   "rh": [
+    { "t": 0, "d": 160, "notes": [{ "p": "G5", "f": 4 }], "ly": ["え"] },
+    { "t": 160, "d": 160, "notes": [{ "p": "F#5", "f": 3 }], "ly": ["お"] },
+    { "t": 320, "d": 160, "notes": [{ "p": "E5", "f": 2 }], "ly": ["か"] },
+    { "t": 480, "d": 960, "notes": [{ "p": "D5", "f": 1 }], "ly": ["き"] }
+   ],
+   "lh": [{ "t": 0, "d": 1440, "notes": [{ "p": "A2", "f": 5 }] }]
+  },
+  {
+   "number": 3, "ending": [2],
+   "rh": [
+    { "t": 0, "d": 480, "notes": [{ "p": "C5", "f": 1 }] },
+    { "t": 480, "d": 960, "notes": [{ "p": "D5", "f": 2, "tie": "start" }] }
+   ],
+   "lh": [{ "t": 0, "d": 1440, "notes": [{ "p": "D3", "f": 5 }, { "p": "A3", "f": 1 }] }]
+  },
+  {
+   "number": 4, "tempo": 60,
+   "rh": [
+    { "t": 0, "d": 480, "notes": [{ "p": "D5", "f": 2, "tie": "stop" }] },
+    { "t": 480, "d": 480, "notes": [{ "p": "C#5", "f": 1 }] },
+    { "t": 960, "d": 480, "notes": [{ "p": "D5", "f": 2 }], "fermata": true }
+   ],
+   "lh": [{ "t": 0, "d": 1440, "notes": [{ "p": "D3", "f": 5 }] }]
+  }
+ ]
+}

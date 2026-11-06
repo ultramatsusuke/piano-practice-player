@@ -1,0 +1,98 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-title" content="ピアノ練習">
+<meta name="theme-color" content="#fafaf8">
+<title>ピアノ練習プレーヤー</title>
+<link rel="stylesheet" href="styles.css">
+<script type="module" src="src/main.js"></script>
+</head>
+<body>
+<div class="page">
+  <header class="top">
+    <span class="appname">ピアノ練習プレーヤー</span>
+    <button class="badge" id="verBtn" aria-label="バージョンと変更履歴"></button>
+    <span class="spacer"></span>
+    <button class="helpbtn" id="helpBtn">？ 使い方</button>
+  </header>
+
+  <div class="songbar">
+    <span class="songlabel">曲：</span><span id="songTitle" class="songtitle">（まだ選んでいません）</span>
+    <button class="b openbtn" id="openBtn">曲を開く</button>
+    <input type="file" id="file" accept=".json,application/json" hidden>
+  </div>
+
+  <div id="err" class="err" role="alert" hidden></div>
+
+  <div id="empty" class="empty">
+    <p>曲ファイル（.json）を選んでください。</p>
+    <p class="sub">一度開いた曲は、次からは自動で出ます。</p>
+    <button class="b big" id="openBtn2">曲ファイルを選ぶ</button>
+  </div>
+
+  <div id="main" hidden>
+    <div id="sum" class="sum"></div>
+    <div class="kbwrap" id="wKB"><svg id="kb" class="kb" viewBox="0 0 380 210" role="img"><title>鍵盤</title></svg></div>
+    <div class="kbwrap" id="wSC"><svg id="score" class="kb" viewBox="0 0 380 190" role="img" style="margin-top:6px"><title>この小節の楽譜</title></svg></div>
+    <div class="kbwrap" id="wTL"><svg id="tl" class="kb" viewBox="0 0 380 140" role="img" style="margin-top:4px"><title>音の長さの図</title></svg></div>
+    <div id="info" class="info"></div>
+    <div class="lab">1. 弾く手</div>
+    <div class="row" id="hands"></div>
+    <div class="lab">2. 場所（セクション → 小節）</div>
+    <div class="grid" id="secs" style="grid-template-columns:repeat(4,1fr);margin-bottom:6px"></div>
+    <div class="grid" id="chips" style="grid-template-columns:repeat(6,1fr)"></div>
+    <div class="lab">3. テンポ（原曲に対する速さ）</div>
+    <div class="row" id="tempos"></div>
+    <div class="lab">4. 再生のしかた</div>
+    <div class="row" id="modes"></div>
+    <div class="lab">5. 表示（出す／隠す）</div>
+    <div class="row" id="views"></div>
+    <div class="lab">6. 大きさ（20〜100の数値）</div>
+    <div id="sizes"></div>
+    <div class="row" id="presets" style="margin-top:4px"></div>
+    <button class="b playbtn" id="play">再生</button>
+    <div class="legend">
+      <span class="sw" style="background:#185FA5"></span> 右手　<span class="sw" style="background:#0F6E56"></span> 左手　丸・ブロックの数字＝指番号（目安）　〜＝次の音とつながる（タイ）
+    </div>
+  </div>
+</div>
+
+<dialog id="helpDlg" aria-labelledby="helpTitle">
+  <div class="dlghead"><h2 id="helpTitle">使い方</h2><button class="close" aria-label="閉じる">閉じる</button></div>
+  <div class="dlgbody">
+    <h3>曲を開く</h3>
+    <p>「曲を開く」を押して、曲ファイル（.json）を選びます。一度開いた曲は、次にアプリを開いたときにも出ます。</p>
+    <h3>練習のしかた</h3>
+    <ol>
+      <li><b>弾く手</b>：両手・右手だけ・左手だけを選びます。選ばなかった手は画面から消えます。</li>
+      <li><b>場所</b>：セクション（イントロ・A など）を選んでから、小節の番号を選びます。</li>
+      <li><b>テンポ</b>：はじめは「ゆっくり（半分）」がおすすめです。</li>
+      <li><b>再生のしかた</b>：「この小節だけ」はその小節をくり返します。「ここから最後まで」は選んだ小節から、「最初から全曲」は曲の頭から弾きます。</li>
+      <li><b>表示</b>：楽譜とリズム図を、出したり隠したりできます。</li>
+      <li><b>大きさ</b>：鍵盤・楽譜・リズム図の大きさを、20〜100 の数字で変えられます。</li>
+    </ol>
+    <p>「再生」を押すと、カッチ・カッチと1小節分数えてから始まります。もう一度押すと止まります。</p>
+    <h3>画面の見かた</h3>
+    <ul>
+      <li>青は右手、緑は左手です。光っている鍵盤が、いま弾く音です。</li>
+      <li>丸の中の数字は指番号です（1＝親指、5＝小指）。</li>
+      <li>「〜」は次の音とつながる（タイ）印です。「つづき」は弾き直さずにのばす音です。</li>
+      <li>リズム図の1マスは8分音符1つ分です。点線の枠は休みです。</li>
+    </ul>
+    <h3>音が出ないとき</h3>
+    <ul>
+      <li>iPhone の音量を上げてください。</li>
+      <li>それでも出ないときは、マナーモード（消音）を切ってみてください。</li>
+    </ul>
+  </div>
+</dialog>
+
+<dialog id="verDlg" aria-labelledby="verTitle">
+  <div class="dlghead"><h2 id="verTitle">変更履歴</h2><button class="close" aria-label="閉じる">閉じる</button></div>
+  <div class="dlgbody" id="verList"></div>
+</dialog>
+</body>
+</html>
