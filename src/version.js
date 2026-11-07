@@ -1,7 +1,12 @@
 // バージョンと変更履歴（画面右上のバージョン表示から見られる）
-export const VERSION = '0.9.1';
+export const VERSION = '0.9.2';
 
 export const CHANGELOG = [
+  {
+    version: '0.9.2',
+    date: '2026-11-07',
+    items: ['マナーモード（消音）のままでも音が出るように、iPhone 向けの別のやり方を足しました'],
+  },
   {
     version: '0.9.1',
     date: '2026-11-07',

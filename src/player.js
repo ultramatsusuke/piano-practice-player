@@ -94,6 +94,7 @@ export class Player {
           // 最後の音は自然に鳴り終わらせる
           this.playing = false;
           audio.keepAwake(false);
+          audio.silentLoop(false);
           o.onEnd();
           return;
         }
@@ -114,5 +115,6 @@ export class Player {
     cancelAnimationFrame(this.raf);
     audio.stopAll();
     audio.keepAwake(false);
+    audio.silentLoop(false);
   }
 }

@@ -23,8 +23,65 @@ export function ctx() {
   return ac;
 }
 
+// マナーモード対策その2（よく使われるやり方）：
+// HTML の audio 要素で無音を流しているあいだは、iPhone がこのページを「音楽を再生するアプリ」と扱うので、
+// 消音スイッチがオンでも Web Audio の音が出る。再生中だけ流し、止めたら止める。
+let silentEl = null;
+
+/** 0.5秒の無音の WAV を作る */
+function silentWavUrl() {
+  const rate = 8000;
+  const n = rate / 2;
+  const buf = new ArrayBuffer(44 + n);
+  const v = new DataView(buf);
+  const str = (o, s) => {
+    for (let i = 0; i < s.length; i++) v.setUint8(o + i, s.charCodeAt(i));
+  };
+  str(0, 'RIFF');
+  v.setUint32(4, 36 + n, true);
+  str(8, 'WAVE');
+  str(12, 'fmt ');
+  v.setUint32(16, 16, true); // fmt の長さ
+  v.setUint16(20, 1, true); // PCM
+  v.setUint16(22, 1, true); // モノラル
+  v.setUint32(24, rate, true);
+  v.setUint32(28, rate, true); // 1秒あたりのバイト数
+  v.setUint16(32, 1, true);
+  v.setUint16(34, 8, true); // 8ビット
+  str(36, 'data');
+  v.setUint32(40, n, true);
+  for (let i = 0; i < n; i++) v.setUint8(44 + i, 128); // 8ビットの無音は 128
+  return URL.createObjectURL(new Blob([buf], { type: 'audio/wav' }));
+}
+
+/**
+ * 無音を流す／止める（流しはじめは、タップの処理の中で呼ぶ）
+ * @param {boolean} on
+ */
+export function silentLoop(on) {
+  if (typeof document === 'undefined') return;
+  try {
+    if (on) {
+      if (!silentEl) {
+        silentEl = document.createElement('audio');
+        silentEl.src = silentWavUrl();
+        silentEl.loop = true;
+        silentEl.setAttribute('playsinline', '');
+        silentEl.setAttribute('x-webkit-airplay', 'deny');
+      }
+      const p = silentEl.play();
+      if (p) p.catch(() => {});
+    } else if (silentEl) {
+      silentEl.pause();
+    }
+  } catch {
+    /* 対応していない端末では何もしない */
+  }
+}
+
 /** iPhone で音が出るようにする（タップの処理の中で呼ぶ） */
 export function unlock() {
+  silentLoop(true);
   const a = ctx();
   try {
     const b = a.createBuffer(1, 1, 22050);
