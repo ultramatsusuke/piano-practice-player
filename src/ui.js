@@ -142,7 +142,7 @@ function drawFrame(item, local) {
 function stopPlay() {
   player.stop();
   clearPlay();
-  $('play').textContent = '再生';
+  setPlayLabel('再生');
   idleInfo(state.shown);
 }
 
@@ -183,7 +183,13 @@ function startPlay() {
       stopPlay();
     },
   });
-  $('play').textContent = '停止';
+  setPlayLabel('停止');
+}
+
+/** 再生ボタン（上と下の2つ）の文字をそろえる @param {string} t */
+function setPlayLabel(t) {
+  $('play').textContent = t;
+  $('playTop').textContent = t;
 }
 
 // ---------- ボタン ----------
@@ -345,10 +351,12 @@ function buildStaticControls() {
     setSz('rhythm', v);
   });
 
-  $('play').onclick = () => {
+  const togglePlay = () => {
     if (player.playing) stopPlay();
     else startPlay();
   };
+  $('play').onclick = togglePlay;
+  $('playTop').onclick = togglePlay;
 }
 
 // ---------- 曲を開く ----------

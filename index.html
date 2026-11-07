@@ -45,7 +45,11 @@
   </div>
 
   <div id="main" hidden>
-    <div id="sum" class="sum"></div>
+    <!-- 再生ボタンは上（ここ）と下の2か所。どちらも同じ働き -->
+    <div class="sumrow">
+      <div id="sum" class="sum"></div>
+      <button class="b playbtn playtop" id="playTop">再生</button>
+    </div>
     <div class="kbwrap" id="wKB"><svg id="kb" class="kb" viewBox="0 0 380 210" role="img"><title>鍵盤</title></svg></div>
     <div class="kbwrap" id="wSC"><svg id="score" class="kb" viewBox="0 0 380 190" role="img" style="margin-top:6px"><title>この小節の楽譜</title></svg></div>
     <div class="kbwrap" id="wTL"><svg id="tl" class="kb" viewBox="0 0 380 140" role="img" style="margin-top:4px"><title>音の長さの図</title></svg></div>
@@ -89,7 +93,7 @@
       <li><b>表示</b>：楽譜・リズム図・ヒントを、出したり隠したりできます。ヒントは、黒い鍵盤・3連符・速さの変化・楽譜の言葉の意味などを、小節ごとに自動で出します。</li>
       <li><b>大きさ</b>：鍵盤・楽譜・リズム図の大きさを、20〜100 の数字で変えられます。</li>
     </ol>
-    <p>「再生」を押すと、カッチ・カッチと1小節分数えてから始まります。もう一度押すと止まります。</p>
+    <p>「再生」を押すと、カッチ・カッチと1小節分数えてから始まります。もう一度押すと止まります。「再生」ボタンは、画面のいちばん上（選択中の表示の横）と、いちばん下の2か所にあります。どちらも同じです。</p>
     <h3>画面の見かた</h3>
     <ul>
       <li>青は右手、緑は左手です。光っている鍵盤が、いま弾く音です。</li>

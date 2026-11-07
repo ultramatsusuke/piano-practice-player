@@ -1,7 +1,12 @@
 // バージョンと変更履歴（画面右上のバージョン表示から見られる）
-export const VERSION = '0.9.0';
+export const VERSION = '0.9.1';
 
 export const CHANGELOG = [
+  {
+    version: '0.9.1',
+    date: '2026-11-07',
+    items: ['「再生」ボタンを、画面のいちばん上（選択中の表示の横）にも付けました。下のボタンと同じ働きです'],
+  },
   {
     version: '0.9.0',
     date: '2026-11-07',
