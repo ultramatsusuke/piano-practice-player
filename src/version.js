@@ -1,7 +1,12 @@
 // バージョンと変更履歴（画面右上のバージョン表示から見られる）
-export const VERSION = '0.9.3';
+export const VERSION = '0.9.4';
 
 export const CHANGELOG = [
+  {
+    version: '0.9.4',
+    date: '2026-11-07',
+    items: ['リズム図の左手（緑）にも、右手と同じように音名と指番号を出すようにしました。コード名は左手の下に出します'],
+  },
   {
     version: '0.9.3',
     date: '2026-11-07',
