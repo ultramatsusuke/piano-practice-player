@@ -113,10 +113,7 @@ test('変換した曲はプレーヤーで再生できる', () => {
 test('リピート・テンポなし・おかしな小節・歌の段', () => {
   const raw = musicXmlToSong(repeatXml);
   assert.equal(raw.title, 'リピートのテスト（自作）');
-  assert.deepEqual(raw.warnings, [
-    'ピアノ以外の段（Voice）は使っていません。',
-    '「D.C.」「D.S.」「Coda」などの、戻ったり飛んだりする記号は、再生では使いません（楽譜の順にまっすぐ進みます）。',
-  ]);
+  assert.deepEqual(raw.warnings, ['ピアノ以外の段（Voice）は使っていません。']);
   const ms = raw.measures;
   assert.equal(ms[0].tempo, 100);
   assert.match(ms[0].warn, /テンポ（速さ）が楽譜に書かれていなかった/);
@@ -130,10 +127,69 @@ test('リピート・テンポなし・おかしな小節・歌の段', () => {
   assert.equal(ms[3].rh[0].notes[0].p, 'F#5');
   assert.equal(ms[3].warn, undefined);
   assert.match(ms[4].warn, /1拍ぶん短い/);
+  // 「D.C. al Fine」は D.C. として使う。Fine の印がないので確認メモを出し、最後まで弾く
+  assert.equal(ms[4].jump, 'dc');
+  assert.match(ms[4].warn, /Fine（終わり）の印が見つかりません/);
   // リピート・二重線で区切り、1小節だけのセクションは前とまとめる
   assert.deepEqual(raw.sections, [{ name: '1〜3', from: 1, to: 3 }, { name: '4〜5', from: 4, to: 5 }]);
   const song = normalizeSong(raw);
-  assert.deepEqual(playOrder(song).map((o) => o.mi), [0, 1, 0, 2, 3, 4]);
+  // D.C. でもどったあとは、くり返さずに2番かっこへ進む
+  assert.deepEqual(playOrder(song).map((o) => o.mi), [0, 1, 0, 2, 3, 4, 0, 2, 3, 4]);
+});
+
+/** もどる・飛ぶ記号のテスト用の、小さな楽譜（1段・4/4・全音符だけ） */
+function jumpXml(marks) {
+  const ms = marks
+    .map((mk, i) => {
+      const attrs = i === 0 ? '<attributes><divisions>1</divisions><time><beats>4</beats><beat-type>4</beat-type></time></attributes><sound tempo="120"/>' : '';
+      return `<measure number="${i + 1}">${attrs}${mk}<note><pitch><step>C</step><octave>5</octave></pitch><duration>4</duration><voice>1</voice></note></measure>`;
+    })
+    .join('');
+  return `<?xml version="1.0"?><score-partwise><part-list><score-part id="P1"><part-name>Piano</part-name></score-part></part-list><part id="P1">${ms}</part></score-partwise>`;
+}
+const dir = (inner, sound = '') => `<direction><direction-type>${inner}</direction-type>${sound}</direction>`;
+
+test('楽譜ファイルの D.S. al Coda（sound の指定で読む）', () => {
+  const raw = musicXmlToSong(
+    jumpXml([
+      '',
+      dir('<segno/>', '<sound segno="segno"/>'),
+      dir('<words>To Coda</words>', '<sound tocoda="coda"/>'),
+      '',
+      dir('<words>D.S. al Coda</words>', '<sound dalsegno="segno"/>'),
+      dir('<coda/>', '<sound coda="coda"/>'),
+    ]),
+  );
+  const ms = raw.measures;
+  assert.equal(ms[1].segno, true);
+  assert.equal(ms[2].toCoda, true);
+  assert.equal(ms[2].coda, undefined);
+  assert.equal(ms[4].jump, 'ds');
+  assert.equal(ms[5].coda, true);
+  assert.ok(ms.every((m) => !m.warn));
+  const song = normalizeSong(raw);
+  // 1〜5 → 𝄋（2）にもどる → 3 の To Coda → Coda（6）。Coda は最初の通りでもそのまま弾く
+  assert.deepEqual(playOrder(song).map((o) => o.mi), [0, 1, 2, 3, 4, 1, 2, 5]);
+  assert.deepEqual(hintsFor(song, 2, 'both'), ['To Coda：もどったあとは、この小節のあと Coda（6小節目）へ飛びます']);
+});
+
+test('楽譜ファイルの D.C. al Fine と F.O.（言葉だけで書いてあるとき）', () => {
+  const raw = musicXmlToSong(jumpXml(['', dir('<words>Fine</words>'), '', dir('<words>D.C. al Fine</words>')]));
+  assert.equal(raw.measures[1].fine, true);
+  assert.equal(raw.measures[3].jump, 'dc');
+  assert.deepEqual(playOrder(normalizeSong(raw)).map((o) => o.mi), [0, 1, 2, 3, 0, 1]);
+  const fo = musicXmlToSong(jumpXml([dir('<segno/>'), '', dir('<words>D.S. &amp; F.O.</words>')]));
+  assert.equal(fo.measures[2].jump, 'ds');
+  assert.equal(fo.measures[2].fadeOut, true);
+});
+
+test('楽譜ファイルの、行き先がないもどる・飛ぶ記号は確認メモにして使わない', () => {
+  const raw = musicXmlToSong(jumpXml(['', dir('<words>To Coda</words>'), dir('<words>D.S.</words>')]));
+  assert.equal(raw.measures[2].jump, undefined);
+  assert.match(raw.measures[2].warn, /𝄋 の印が見つかりません/);
+  assert.equal(raw.measures[1].toCoda, undefined);
+  assert.match(raw.measures[1].warn, /Coda の印が見つかりません/);
+  assert.deepEqual(playOrder(normalizeSong(raw)).map((o) => o.mi), [0, 1, 2]);
 });
 
 test('区切りの印がない楽譜は8小節ごとに区切る', () => {
@@ -196,5 +252,6 @@ test('小節ヒント', () => {
   assert.deepEqual(hintsFor(song, 3, 'both'), ['ここから遅くなります（1分間に72拍）', 'フェルマータ（のばす記号）の音は、いつもより長くのばします']);
   const rep = normalizeSong(musicXmlToSong(repeatXml));
   assert.deepEqual(hintsFor(rep, 3, 'R'), ['ここから4分の3拍子です', 'ここから調号（♯・♭の数）が変わります：♯1つ', '黒い鍵盤を弾きます：ファ♯']);
-  assert.deepEqual(hintsFor(rep, 4, 'both'), ['「D.C. al Fine」＝最初にもどって、Fine（終わり）まで']);
+  // D.C. などは、楽譜の言葉の訳ではなく、アプリが弾く順のとおりに説明する
+  assert.deepEqual(hintsFor(rep, 4, 'both'), ['D.C.（ダ・カーポ）：この小節を弾いたら、曲の最初にもどります']);
 });

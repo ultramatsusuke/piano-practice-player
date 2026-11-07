@@ -1,6 +1,6 @@
 // 画面（ボタン・選択中の要約・説明欄・モーダル）。v0.7.0 の UI の決めごとを守る
 import { parseSongText, SongError } from './song.js';
-import { playOrder } from './timeline.js';
+import { playOrder, octaveShift } from './timeline.js';
 import { buildKeyboard } from './keyboard.js';
 import { drawScore } from './score.js';
 import { drawRhythm, noteNames, fingers } from './rhythm.js';
@@ -26,12 +26,14 @@ function esc(s) {
 const state = {
   /** @type {import('./song.js').Song|null} */
   song: null,
-  order: /** @type {{mi:number, pass:number}[]} */ ([]),
+  order: /** @type {import('./timeline.js').OrderItem[]} */ ([]),
   hand: /** @type {'both'|'R'|'L'} */ ('both'),
   ratio: 0.5,
   mode: 'all',
   barSel: 0, // 選んでいる小節（index）
+  occ: 0, // 選んでいる小節の「何回目」（0 から。2回以上弾く小節だけ選べる）
   shown: 0, // 表示している小節（index）
+  shownPass: 1, // 表示している小節の「何回目の通りか」（8va の表示に使う）
   showScore: true,
   showRhythm: true,
   showHints: true,
@@ -63,26 +65,59 @@ function lyr(m, verse) {
   return m.rh.map((e) => (verse === 2 && e.ly[1] ? e.ly[1] : e.ly[0] || '')).join('');
 }
 
+/** その小節が演奏順のどこに出てくるか（order の番号の並び） */
+function occurrences(mi) {
+  const out = [];
+  state.order.forEach((o, k) => {
+    if (o.mi === mi) out.push(k);
+  });
+  return out;
+}
+/** 選んでいる小節・回の、演奏順の番号（演奏順にない小節なら -1） */
+function selIndex() {
+  const occ = occurrences(state.barSel);
+  return occ.length ? occ[Math.min(state.occ, occ.length - 1)] : -1;
+}
+/** 2回以上弾く小節なら「（2回目）」のような文字 */
+function occLabel(mi, n) {
+  return occurrences(mi).length > 1 ? `（${n}回目）` : '';
+}
+/** その回に、両手の音を何オクターブずらすか */
+function shiftOf(m, pass) {
+  return { rh: octaveShift(m, pass, 'rh'), lh: octaveShift(m, pass, 'lh') };
+}
+
 function updateSum() {
-  $('sum').textContent = `選択中：${secName(state.barSel)}　${num(state.barSel)}小節目 ／ ${HN[state.hand]} ／ ${TN[state.ratio]} ／ ${MN[state.mode]}`;
+  $('sum').textContent = `選択中：${secName(state.barSel)}　${num(state.barSel)}小節目${occLabel(state.barSel, state.occ + 1)} ／ ${HN[state.hand]} ／ ${TN[state.ratio]} ／ ${MN[state.mode]}`;
 }
 
 function rebuildKB() {
   kb = buildKeyboard(/** @type {any} */ ($('kb')), state.hand, state.song.range);
 }
 
-function showBar(mi) {
+/**
+ * @param {number} mi
+ * @param {number} [pass] 何回目の通りか。省くと、選んでいる回（選んでいない小節なら1回目）
+ */
+function showBar(mi, pass) {
+  if (pass === undefined) {
+    const k = mi === state.barSel ? selIndex() : occurrences(mi)[0];
+    pass = k >= 0 && k !== undefined ? state.order[k].pass : 1;
+  }
   state.shown = mi;
+  state.shownPass = pass;
   const m = state.song.measures[mi];
   rhythmView = drawRhythm(/** @type {any} */ ($('tl')), state.song, m, state.hand);
-  scoreView = drawScore(/** @type {any} */ ($('score')), state.song, m, state.hand);
+  scoreView = drawScore(/** @type {any} */ ($('score')), state.song, m, state.hand, shiftOf(m, pass));
   updateChips();
   if (!player.playing) idleInfo(mi);
 }
 
 function idleInfo(mi) {
   const m = state.song.measures[mi];
-  let h = `<div style="font-weight:500">${esc(secName(mi))}　${esc(m.number)}小節目</div>`;
+  // 「何回目」は選んでいる小節のときだけ出す（再生が終わったあとに残る小節は、何回目かを選んでいないので出さない）
+  const occ = mi === state.barSel ? occLabel(mi, state.occ + 1) : '';
+  let h = `<div style="font-weight:500">${esc(secName(mi))}　${esc(m.number)}小節目${occ}</div>`;
   const l1 = lyr(m, 1);
   if (l1 && state.hand !== 'L') h += `<div>歌詞${m.hasVerse2 ? '（1番）' : ''}：${esc(l1)}</div>`;
   if (m.hasVerse2 && state.hand !== 'L') h += `<div>歌詞（2番）：${esc(lyr(m, 2))}</div>`;
@@ -104,6 +139,7 @@ function clearPlay() {
 
 function drawFrame(item, local) {
   const m = state.song.measures[item.mi];
+  const sh = shiftOf(m, item.pass); // 8va などのときは、本当に弾く鍵盤を光らせる
   kb.R.clear();
   kb.L.clear();
   let lt = '';
@@ -111,7 +147,7 @@ function drawFrame(item, local) {
   if (state.hand !== 'R') {
     for (const e of m.lh) {
       if (local >= e.t && local < e.t + e.d) {
-        e.notes.forEach((n) => kb.L.mark(n.midi, LC, n.f));
+        e.notes.forEach((n) => kb.L.mark(n.midi + sh.lh * 12, LC, n.f));
         lt = '左手：' + noteNames(e.notes);
       }
     }
@@ -124,7 +160,7 @@ function drawFrame(item, local) {
     for (const e of m.rh) {
       if (local >= e.t && local < e.t + e.d) {
         found = true;
-        e.notes.forEach((n) => kb.R.mark(n.midi, RC, n.f));
+        e.notes.forEach((n) => kb.R.mark(n.midi + sh.rh * 12, RC, n.f));
         const t = item.pass === 2 && e.ly[1] ? e.ly[1] : e.ly[0];
         const fg = fingers(e.notes);
         rt = 'いま：' + noteNames(e.notes) + (fg ? `（右手 ${fg}）` : '') + (e.tiedIn ? '　つづき（弾き直さない）' : '') + (t ? `　歌詞「${t}」` : '');
@@ -132,7 +168,15 @@ function drawFrame(item, local) {
     }
     if (!found) rt = 'いま：休み';
   } else rt = `${m.number}小節目`;
-  const head1 = `<div style="color:var(--text-secondary);font-size:13px">${esc(secName(item.mi))}　${esc(m.number)}小節目${m.hasVerse2 ? `（${item.pass}番）` : ''}</div>`;
+  // 小節の見出し：何回目・何番・D.S. のあと・だんだん小さく・8va
+  const tags = [];
+  if (occurrences(item.mi).length > 1) tags.push(`${item.n}回目`);
+  if (m.hasVerse2) tags.push(`${item.pass}番`);
+  if (item.ret) tags.push(item.ret === 'ds' ? 'D.S. のあと' : 'D.C. のあと');
+  if (item.fade) tags.push('だんだん小さく');
+  if (sh.rh && state.hand !== 'L') tags.push(`右手 ${Math.abs(sh.rh)}オクターブ${sh.rh > 0 ? '上' : '下'}`);
+  if (sh.lh && state.hand !== 'R') tags.push(`左手 ${Math.abs(sh.lh)}オクターブ${sh.lh > 0 ? '上' : '下'}`);
+  const head1 = `<div style="color:var(--text-secondary);font-size:13px">${esc(secName(item.mi))}　${esc(m.number)}小節目${tags.length ? `（${esc(tags.join('・'))}）` : ''}</div>`;
   $('info').innerHTML = head1 + `<div style="font-weight:500">${esc(rt)}</div>` + (lt ? `<div style="color:var(--text-secondary);font-size:14px">${esc(lt)}</div>` : '');
   rhythmView.update(local);
   scoreView.update(local);
@@ -153,14 +197,14 @@ function startPlay() {
   let loop = false;
   if (state.mode === 'all') order = full;
   else {
-    let k = full.findIndex((o) => o.mi === state.barSel);
+    let k = selIndex();
     if (k < 0) k = 0;
     if (state.mode === 'bar') {
-      order = [full[k]];
+      order = [{ ...full[k], fade: false }]; // 1小節のくり返しは、だんだん小さくしない
       loop = true;
     } else order = full.slice(k);
   }
-  showBar(order[0].mi);
+  showBar(order[0].mi, order[0].pass);
   let lastItem = -1;
   player.start({
     song: state.song,
@@ -170,11 +214,11 @@ function startPlay() {
     hand: state.hand,
     onCount(beat) {
       const mi = order[0].mi;
-      $('info').innerHTML = `<div style="font-weight:500">カウント　${beat}</div><div style="color:var(--text-secondary);font-size:14px">${esc(secName(mi))}　${esc(num(mi))}小節目から始まります</div>`;
+      $('info').innerHTML = `<div style="font-weight:500">カウント　${beat}</div><div style="color:var(--text-secondary);font-size:14px">${esc(secName(mi))}　${esc(num(mi))}小節目${esc(occLabel(mi, order[0].n))}から始まります</div>`;
     },
     onFrame(idx, item, local) {
       if (idx !== lastItem) {
-        if (item.mi !== state.shown) showBar(item.mi);
+        if (item.mi !== state.shown || item.pass !== state.shownPass) showBar(item.mi, item.pass);
         lastItem = idx;
       }
       drawFrame(item, local);
@@ -212,6 +256,7 @@ let modeBtns = [];
 let viewBtns = [];
 let secBtns = [];
 let chipBtns = [];
+let occBtns = [];
 const sizeInputs = {};
 
 function updateChips() {
@@ -251,10 +296,36 @@ function buildChips(si) {
   chipBtns = mkBtns('chips', items, (mi) => {
     if (player.playing) stopPlay();
     state.barSel = mi;
+    state.occ = 0;
+    buildOccs();
     showBar(mi);
     updateSum();
   });
   updateSecs();
+}
+
+/** 2回以上弾く小節を選んだときだけ、「1回目／2回目…」のボタンを出す */
+function buildOccs() {
+  const occ = occurrences(state.barSel);
+  const box = $('occs');
+  if (occ.length < 2) {
+    box.replaceChildren();
+    box.style.display = 'none';
+    occBtns = [];
+    return;
+  }
+  box.style.display = '';
+  occBtns = mkBtns('occs', occ.map((k, i) => ({ t: `${state.order[k].n}回目`, v: i })), (i) => {
+    if (player.playing) stopPlay();
+    state.occ = i;
+    updateOccs();
+    showBar(state.barSel);
+    updateSum();
+  });
+  updateOccs();
+}
+function updateOccs() {
+  occBtns.forEach((o) => (o.el.className = 'b' + (o.v === state.occ ? ' on' : '')));
 }
 
 function applySizes() {
@@ -377,6 +448,7 @@ function openSongText(text, fileName, save) {
   state.song = song;
   state.order = playOrder(song);
   state.barSel = song.sections[0].from;
+  state.occ = 0;
   state.shown = state.barSel;
   $('songTitle').textContent = song.title;
   $('empty').hidden = true;
@@ -386,12 +458,15 @@ function openSongText(text, fileName, save) {
   secBtns = mkBtns('secs', song.sections.map((s, i) => ({ t: s.name, v: i })), (i) => {
     if (player.playing) stopPlay();
     state.barSel = state.song.sections[i].from;
+    state.occ = 0;
     buildChips(i);
+    buildOccs();
     showBar(state.barSel);
     updateSum();
   });
   rebuildKB();
   buildChips(secOf(state.barSel));
+  buildOccs();
   showBar(state.barSel);
   updateSum();
   if (save) saveLastSong({ fileName, text });

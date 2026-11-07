@@ -7,7 +7,7 @@ const LOOKAHEAD_MS = 150;
 /**
  * @typedef {Object} StartOptions
  * @property {import('./song.js').Song} song
- * @property {{mi:number, pass:number}[]} order  演奏する小節の並び
+ * @property {import('./timeline.js').OrderItem[]} order  演奏する小節の並び
  * @property {boolean} loop   true なら order をくり返す（この小節だけ）
  * @property {number} ratio   原曲に対する速さ
  * @property {'both'|'R'|'L'} hand
@@ -61,8 +61,8 @@ export class Player {
         if (at > horizon) break;
         if (at >= pos - 50) {
           const sec = (n.endMs - n.startMs) / 1000;
-          if (n.hand === 'rh') audio.note(n.midi, songT0 + at / 1000, Math.max(0.25, sec * 0.95), 0.16);
-          else audio.note(n.midi, songT0 + at / 1000, Math.min(2.2, sec), 0.14);
+          if (n.hand === 'rh') audio.note(n.midi, songT0 + at / 1000, Math.max(0.25, sec * 0.95), 0.16 * n.gain);
+          else audio.note(n.midi, songT0 + at / 1000, Math.min(2.2, sec), 0.14 * n.gain);
         }
         ni++;
       }

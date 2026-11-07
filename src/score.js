@@ -22,8 +22,9 @@ function dotted(d) {
  * @param {import('./song.js').Song} song
  * @param {import('./song.js').Measure} m
  * @param {'both'|'R'|'L'} hand
+ * @param {{rh:number, lh:number}} [shift]  この回に、音を何オクターブずらして弾くか。楽譜は本と同じ高さで書き、「8va」などを添える
  */
-export function drawScore(svg, song, m, hand) {
+export function drawScore(svg, song, m, hand, shift = { rh: 0, lh: 0 }) {
   clr(svg);
   const E = song.tpq / 2; // 8分音符の tick
   const eighths = m.lengthTicks / E;
@@ -57,6 +58,17 @@ export function drawScore(svg, song, m, hand) {
     keySig.forEach((k, i) => tx(svg, 38 + i * 8, BB - (k.dn - 14 - 18) * 4, 15, INK, k.sym));
   }
   for (const c of m.chords) tx(svg, SX0 + (c.t / E) * SU + 2, 12, 11, 'var(--text-secondary)', c.name, 500, 'start');
+
+  // 8va など（オクターブをずらして弾く印）：記号と、小節の終わりまでの点線
+  const ottava = (oct, y, color) => {
+    if (!oct) return;
+    const label = { 1: '8va', 2: '15ma', 3: '22ma', '-1': '8vb', '-2': '15mb', '-3': '22mb' }[oct];
+    tx(svg, SX0 - 4, y, 12, color, label, 700, 'start');
+    mk(svg, 'line', { x1: SX0 + 26, x2: SX1, y1: y, y2: y, stroke: color, 'stroke-width': 1, 'stroke-dasharray': '4 3' });
+    mk(svg, 'line', { x1: SX1, x2: SX1, y1: y, y2: y + (oct > 0 ? 6 : -6), stroke: color, 'stroke-width': 1 });
+  };
+  if (T) ottava(shift.rh, TB - 32 - 12, RC);
+  if (Bs) ottava(shift.lh, BB + 14, LC);
 
   const drawNotes = (kind, base, events) => {
     const dnB = kind === 't' ? 30 : 18;

@@ -35,6 +35,14 @@ const HAND_NAME = { rh: '右手', lh: '左手' };
  * @property {boolean} repeatStart
  * @property {boolean} repeatEnd
  * @property {number[]|null} ending
+ * @property {boolean} segno    𝄋（D.S. でもどってくる所）。この小節の頭にある
+ * @property {boolean} coda     Coda（To Coda で飛んでくる所）。この小節から
+ * @property {boolean} toCoda   もどったあと、この小節の終わりで Coda へ飛ぶ
+ * @property {boolean} fine     もどったあと、この小節の終わりで曲を終える
+ * @property {''|'ds'|'dc'} jump  この小節の終わりで、𝄋（ds）か曲の最初（dc）へもどる（1回だけ）
+ * @property {boolean} fadeOut  もどったあと、だんだん小さくして終わる（F.O.）
+ * @property {{rh:number, lh:number, passes:number[]|null}|null} octave
+ *   音を何オクターブずらして鳴らすか（8va なら 1）。passes があれば、その回だけ（2回目だけ、など）
  * @property {{t:number, name:string}[]} chords
  * @property {string} memo
  * @property {string} warn
@@ -120,6 +128,16 @@ export function normalizeSong(raw) {
     const chords = Array.isArray(m.chords)
       ? m.chords.filter((c) => c && typeof c.name === 'string').map((c) => ({ t: Number(c.t) || 0, name: c.name }))
       : [];
+    if (m.jump !== undefined && !['ds', 'dc'].includes(m.jump)) throw new SongError(`${label}の「jump」が読めません（"ds" か "dc"）。`);
+    let octave = null;
+    if (m.octave !== undefined) {
+      const o = m.octave;
+      const ok = (v) => v === undefined || (Number.isInteger(v) && Math.abs(v) <= 3);
+      if (!o || typeof o !== 'object' || !ok(o.rh) || !ok(o.lh) || (o.passes !== undefined && !(Array.isArray(o.passes) && o.passes.every((p) => Number.isInteger(p) && p > 0)))) {
+        throw new SongError(`${label}の「octave」（オクターブをずらす指定）が読めません。`);
+      }
+      if (o.rh || o.lh) octave = { rh: o.rh || 0, lh: o.lh || 0, passes: o.passes && o.passes.length ? o.passes.map(Number) : null };
+    }
     return {
       index,
       number: m.number != null ? m.number : index + 1,
@@ -133,6 +151,13 @@ export function normalizeSong(raw) {
       repeatStart: !!m.repeatStart,
       repeatEnd: !!m.repeatEnd,
       ending: Array.isArray(m.ending) && m.ending.length ? m.ending.map(Number) : null,
+      segno: !!m.segno,
+      coda: !!m.coda,
+      toCoda: !!m.toCoda,
+      fine: !!m.fine,
+      jump: m.jump || '',
+      fadeOut: !!m.fadeOut,
+      octave,
       chords,
       memo: typeof m.memo === 'string' ? m.memo : '',
       warn: typeof m.warn === 'string' ? m.warn : '',
@@ -181,10 +206,11 @@ export function autoRange(measures, hand) {
   let lo = Infinity;
   let hi = -Infinity;
   for (const m of measures) {
+    const sh = m.octave ? m.octave[hand] * 12 : 0; // 8va などでずらして鳴らす音も入るようにする
     for (const ev of m[hand]) {
       for (const n of ev.notes) {
-        lo = Math.min(lo, n.midi);
-        hi = Math.max(hi, n.midi);
+        lo = Math.min(lo, n.midi, n.midi + sh);
+        hi = Math.max(hi, n.midi, n.midi + sh);
       }
     }
   }

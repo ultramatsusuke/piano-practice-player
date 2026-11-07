@@ -1,5 +1,49 @@
-// 小節ヒント（自動）：楽譜の言葉の訳、黒い鍵盤、リズムの注意、速さ・拍子の変化
+// 小節ヒント（自動）：楽譜の言葉の訳、黒い鍵盤、リズムの注意、速さ・拍子の変化、もどる・飛ぶ記号、8va
 import { isBlack, doremi } from './pitch.js';
+import { playOrder, findSegno, octaveShift } from './timeline.js';
+
+const OCT_NAME = { 1: '8va', 2: '15ma', 3: '22ma', '-1': '8vb', '-2': '15mb', '-3': '22mb' };
+const JUMP_TEXT = /\bd\.?\s?[cs]\.?(?=\s|$)|da capo|dal segno|\bcoda\b|\bfine\b|\bsegno\b|\bf\.?\s?o\.?(?=\s|$)|fade/i;
+
+/**
+ * もどる・飛ぶ記号と、オクターブをずらす指定のヒント
+ * @param {import('./song.js').Song} song
+ * @param {number} mi
+ * @param {[string, string][]} hands
+ */
+function flowHints(song, mi, hands) {
+  const ms = song.measures;
+  const m = ms[mi];
+  const out = [];
+  const no = (i) => `${ms[i].number}小節目`;
+  if (m.segno) out.push('𝄋（セーニョ）：D.S. のときに、この小節にもどってきます');
+  if (m.coda) out.push('Coda（コーダ）：To Coda のところから、この小節へ飛んできます');
+  if (m.jump === 'ds') {
+    const s = findSegno(ms, mi);
+    if (s >= 0) out.push(`D.S.（ダル・セーニョ）：この小節を弾いたら、𝄋 の小節（${no(s)}）にもどります`);
+  }
+  if (m.jump === 'dc') out.push('D.C.（ダ・カーポ）：この小節を弾いたら、曲の最初にもどります');
+  if (m.jump && m.fadeOut) out.push('もどったあとは、音をだんだん小さくして終わります（F.O.）');
+  if (m.toCoda) {
+    const c = ms.findIndex((x, k) => k > mi && x.coda);
+    if (c >= 0) out.push(`To Coda：もどったあとは、この小節のあと Coda（${no(c)}）へ飛びます`);
+  }
+  if (m.fine) out.push('Fine（フィーネ）：もどったあとは、この小節で終わりです');
+
+  if (m.octave) {
+    // 何回目にずらすかは、演奏順から数える（画面の「1回目／2回目」と同じ数え方）
+    const occ = playOrder(song).filter((o) => o.mi === mi);
+    for (const [h, label] of hands) {
+      const ons = occ.filter((o) => octaveShift(m, o.pass, /** @type {'rh'|'lh'} */ (h)) !== 0);
+      if (!ons.length) continue;
+      const oct = octaveShift(m, ons[0].pass, /** @type {'rh'|'lh'} */ (h));
+      const how = `${label}を${Math.abs(oct)}オクターブ${oct > 0 ? '上' : '下'}で弾きます（${OCT_NAME[oct]}）`;
+      const when = ons.length === occ.length ? '' : ons.map((o) => `${o.n}回目`).join('と') + 'は、';
+      out.push(when + how);
+    }
+  }
+  return out;
+}
 
 // 強弱記号（そのままの文字で決まるもの）
 const DYNAMICS = {
@@ -104,10 +148,15 @@ export function hintsFor(song, mi, hand) {
     }
   }
 
-  // 楽譜の言葉
+  // もどる・飛ぶ記号、8va
+  const flow = flowHints(song, mi, hands);
+  out.push(...flow);
+
+  // 楽譜の言葉（D.S. などは上で説明したので、くり返さない）
   const seen = new Set();
   for (const d of m.directions) {
     if (seen.has(d.text)) continue;
+    if (flow.length && JUMP_TEXT.test(d.text)) continue;
     seen.add(d.text);
     const tr = translateWord(d.text);
     if (tr) out.push(`「${d.text}」＝${tr}`);

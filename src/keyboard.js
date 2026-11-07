@@ -31,11 +31,13 @@ function buildRow(parent, yOff, lo, hi, title, color, big) {
       mk(g, 'rect', { x: X0 + (wmap[m - 1] + 1) * WK - BW / 2, y: TOP, width: BW, height: BH, rx: 2, fill: 'var(--text-primary)', opacity: 0.85 });
     }
   }
-  const ov = mk(g, 'g', {});
+  const LY = TOP + WH - 5; // 白鍵の音名（ドレミ）の文字の位置
   wl.forEach((m, i) => {
-    const t = tx(g, X0 + i * WK + WK / 2, TOP + WH - 5, 11, 'var(--text-secondary)', whiteKeyLabel(m));
+    const t = tx(g, X0 + i * WK + WK / 2, LY, 11, 'var(--text-secondary)', whiteKeyLabel(m));
     t.setAttribute('dominant-baseline', 'auto');
   });
+  // 押された鍵盤の色は、音名の文字の上に重ねる（音名は mark の中で白い文字で書き直す）
+  const ov = mk(g, 'g', {});
   if (wmap[60] !== undefined) {
     const t = tx(g, X0 + wmap[60] * WK + WK / 2, TOP + WH + 15, 11, 'var(--text-muted)', '真ん中のド');
     t.setAttribute('dominant-baseline', 'auto');
@@ -54,9 +56,12 @@ function buildRow(parent, yOff, lo, hi, title, color, big) {
         tx(ov, cx, TOP + BH - CR - 5, 11, col, label);
       } else {
         const x = X0 + wmap[m] * WK;
-        mk(ov, 'rect', { x: x + 1, y: TOP + 1, width: WK - 2, height: WH - 2, rx: 3, fill: col, opacity: 0.92 });
-        mk(ov, 'circle', { cx: x + WK / 2, cy: TOP + WH - 26, r: CR, fill: '#fff' });
-        tx(ov, x + WK / 2, TOP + WH - 26, 11, col, label);
+        mk(ov, 'rect', { x: x + 1, y: TOP + 1, width: WK - 2, height: WH - 2, rx: 3, fill: col });
+        // 丸（指番号）は音名の文字より上に置き、重ならないようにする
+        mk(ov, 'circle', { cx: x + WK / 2, cy: TOP + WH - 18 - CR, r: CR, fill: '#fff' });
+        tx(ov, x + WK / 2, TOP + WH - 18 - CR, 11, col, label);
+        // 音名は白い太字で、濃い色の上でも読めるようにする
+        tx(ov, x + WK / 2, LY, 11, '#fff', whiteKeyLabel(m), 700).setAttribute('dominant-baseline', 'auto');
       }
     },
     clear() {

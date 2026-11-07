@@ -1,18 +1,18 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import { readFileSync } from 'node:fs';
-import { parseSongText } from '../src/song.js';
-import { playOrder, buildSchedule, countIn, fermataRegions, measureClock } from '../src/timeline.js';
+import { parseSongText, normalizeSong } from '../src/song.js';
+import { playOrder, buildSchedule, countIn, fermataRegions, measureClock, octaveShift } from '../src/timeline.js';
 
 const song = parseSongText(readFileSync(new URL('./fixtures/test-song.json', import.meta.url), 'utf8'));
 
 test('リピートと番号かっこの演奏順', () => {
   assert.deepEqual(playOrder(song), [
-    { mi: 0, pass: 1 },
-    { mi: 1, pass: 1 },
-    { mi: 0, pass: 2 },
-    { mi: 2, pass: 2 },
-    { mi: 3, pass: 1 },
+    { mi: 0, pass: 1, n: 1, ret: '', fade: false },
+    { mi: 1, pass: 1, n: 1, ret: '', fade: false },
+    { mi: 0, pass: 2, n: 2, ret: '', fade: false },
+    { mi: 2, pass: 2, n: 1, ret: '', fade: false },
+    { mi: 3, pass: 1, n: 1, ret: '', fade: false },
   ]);
 });
 
@@ -78,4 +78,80 @@ test('カウントイン', () => {
   // 弱起（3拍子で1拍だけの小節）：1小節分＋足りない2拍を数える
   const pickup = { ...song.measures[0], lengthTicks: 480 };
   assert.deepEqual(countIn(pickup, 1), { beats: 5, beatMs: 500, countMs: 2500, perBar: 3 });
+});
+
+/** もどる・飛ぶ記号と 8va のテスト用の、小さな曲（4/4・120bpm・各小節は右手の全音符1つ） */
+function flowSong(marks, sections) {
+  const raw = {
+    format: 'piano-practice-song',
+    formatVersion: 1,
+    title: 'もどる・飛ぶ（自作）',
+    ticksPerQuarter: 480,
+    measures: marks.map((mk, i) => ({
+      number: i + 1,
+      ...(i === 0 ? { time: [4, 4], tempo: 120 } : {}),
+      ...mk,
+      rh: [{ t: 0, d: 1920, notes: [{ p: 'C5' }] }],
+    })),
+  };
+  if (sections) raw.sections = sections;
+  return normalizeSong(raw);
+}
+const mis = (order) => order.map((o) => o.mi);
+
+test('D.S. でもどったあとは、くり返さずに最後の番号かっこを弾く', () => {
+  // 1 | 2𝄋 |: 3 | 4 [1. :| 5 [2. | 6 D.S.
+  const s = flowSong([{}, { segno: true }, { repeatStart: true }, { ending: [1], repeatEnd: true }, { ending: [2] }, { jump: 'ds' }]);
+  const order = playOrder(s);
+  assert.deepEqual(mis(order), [0, 1, 2, 3, 2, 4, 5, 1, 2, 4, 5]);
+  // 何回目に弾くか（画面の「1回目／2回目／3回目」）と、もどったあとの印
+  assert.deepEqual(order.filter((o) => o.mi === 2).map((o) => [o.n, o.pass, o.ret]), [[1, 1, ''], [2, 2, ''], [3, 2, 'ds']]);
+  // D.S. は1回だけ（もどったあとの 6 では、もうもどらない）
+  assert.equal(order[order.length - 1].ret, 'ds');
+});
+
+test('D.C. al Fine・D.S. al Coda', () => {
+  const fine = flowSong([{}, { fine: true }, {}, { jump: 'dc' }]);
+  assert.deepEqual(mis(playOrder(fine)), [0, 1, 2, 3, 0, 1]);
+  const coda = flowSong([{ segno: true }, { toCoda: true }, {}, { jump: 'ds' }, { coda: true }, {}]);
+  assert.deepEqual(mis(playOrder(coda)), [0, 1, 2, 3, 0, 1, 4, 5]);
+  // 行き先の 𝄋 がない D.S. は使わない
+  assert.deepEqual(mis(playOrder(flowSong([{}, { jump: 'ds' }, {}]))), [0, 1, 2]);
+});
+
+test('F.O.：もどった先のセクションの終わりまで、だんだん小さくして終わる', () => {
+  const s = flowSong([{}, { segno: true }, {}, {}, { jump: 'ds', fadeOut: true }], [
+    { name: 'イントロ', from: 1, to: 1 },
+    { name: 'A', from: 2, to: 3 },
+    { name: 'B', from: 4, to: 5 },
+  ]);
+  const order = playOrder(s);
+  assert.deepEqual(mis(order), [0, 1, 2, 3, 4, 1, 2]);
+  assert.deepEqual(order.map((o) => o.fade), [false, false, false, false, false, true, true]);
+  const sch = buildSchedule(s, order, 1);
+  const gains = sch.notes.map((n) => n.gain);
+  assert.deepEqual(gains.slice(0, 5), [1, 1, 1, 1, 1]);
+  // 区間の頭は 1 のまま、そのあと小さくなる
+  assert.equal(gains[5], 1);
+  assert.ok(gains[6] < 0.2 && gains[6] > 0);
+  // 1小節のくり返し（この小節だけ）は、だんだん小さくしない
+  assert.equal(buildSchedule(s, [{ ...order[6], fade: false }], 1).notes[0].gain, 1);
+});
+
+test('2回目だけ 8va：その回だけ1オクターブ上で鳴らす', () => {
+  const s = flowSong([{ repeatStart: true, octave: { rh: 1, passes: [2] } }, { repeatEnd: true }, {}]);
+  const sch = buildSchedule(s, playOrder(s), 1);
+  // C5（72）→ 2回目の1小節目だけ C6（84）
+  assert.deepEqual(sch.notes.map((n) => n.midi), [72, 72, 84, 72, 72]);
+  assert.equal(octaveShift(s.measures[0], 1, 'rh'), 0);
+  assert.equal(octaveShift(s.measures[0], 2, 'rh'), 1);
+  assert.equal(octaveShift(s.measures[0], 2, 'lh'), 0);
+  // 鍵盤の範囲には、ずらした音も入る
+  assert.ok(s.range.rh[1] >= 84);
+});
+
+test('曲ファイルの jump・octave の書き方がおかしいときは、やさしい日本語のエラー', () => {
+  assert.throws(() => flowSong([{ jump: 'segno' }]), /「jump」が読めません/);
+  assert.throws(() => flowSong([{ octave: { rh: 'up' } }]), /「octave」/);
+  assert.throws(() => flowSong([{ octave: { rh: 1, passes: [0] } }]), /「octave」/);
 });

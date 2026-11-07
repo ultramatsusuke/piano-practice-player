@@ -17,7 +17,12 @@ const KIND = {
   'minor-11th': 'm11', 'dominant-13th': '13', 'major-13th': 'M13', 'minor-13th': 'm13',
   'suspended-second': 'sus2', 'suspended-fourth': 'sus4', power: '5',
 };
-const JUMP_WORDS = /^\s*(d\.?\s?c\.?|d\.?\s?s\.?)(\s|$)|da capo|dal segno|to coda/i;
+// もどる・飛ぶ記号を、言葉（words）からも読む（<sound dalsegno> などがないファイルのため）
+const W_DC = /^\s*d\.?\s?c\.?(\s|$)|da capo/i;
+const W_DS = /^\s*d\.?\s?s\.?(\s|$)|dal segno/i;
+const W_TOCODA = /to\s*coda/i;
+const W_FINE = /^\s*fine\s*$/i;
+const W_FO = /(^|\s|&)f\.?\s?o\.?(\s|$)|fade\s*out/i;
 
 /**
  * @param {string} xmlText
@@ -51,7 +56,6 @@ export function musicXmlToSong(xmlText, fileName = '') {
   const conv = convertPart(piano);
   if (conv.maxStaves < 2) warnings.push('左手の段がない楽譜です（右手だけで開きました）。');
   if (conv.extraStaff) warnings.push('3段目より下の段の音は使っていません。');
-  if (conv.jump) warnings.push('「D.C.」「D.S.」「Coda」などの、戻ったり飛んだりする記号は、再生では使いません（楽譜の順にまっすぐ進みます）。');
 
   const title =
     textOf(root, 'work/work-title') ||
@@ -143,7 +147,6 @@ function convertPart(part) {
   let curEnding = null;
   let maxStaves = 1;
   let extraStaff = false;
-  let jump = false;
   const verses = []; // 歌詞の番号（出てきた順）
   const info = [];
   const raws = [];
@@ -161,11 +164,27 @@ function convertPart(part) {
     let repeatEnd = false;
     let doubleEnd = false;
     let ending = curEnding;
+    // もどる・飛ぶ記号（𝄋・Coda は小節の頭、D.S.・D.C.・To Coda・Fine は小節の終わりとして扱う）
+    const fl = { segno: false, coda: false, codaSign: false, toCoda: false, fine: false, jump: '', fadeOut: false, alFine: false, alCoda: false };
     const tk = (d) => ((Number(d) || 0) * TPQ) / st.div;
     const sound = (s) => {
       if (!s) return;
       if (Number(s.attrs.tempo) > 0) tempo = Number(s.attrs.tempo);
-      if (s.attrs.dacapo === 'yes' || s.attrs.dalsegno || s.attrs.tocoda) jump = true;
+      if (s.attrs.dacapo === 'yes') fl.jump = 'dc';
+      if (s.attrs.dalsegno) fl.jump = 'ds';
+      if (s.attrs.tocoda) fl.toCoda = true;
+      if (s.attrs.segno) fl.segno = true;
+      if (s.attrs.coda) fl.coda = true;
+      if (s.attrs.fine) fl.fine = true;
+    };
+    const jumpWords = (w) => {
+      if (W_DC.test(w)) fl.jump = fl.jump || 'dc';
+      if (W_DS.test(w)) fl.jump = fl.jump || 'ds';
+      if (W_TOCODA.test(w)) fl.toCoda = true;
+      if (W_FINE.test(w)) fl.fine = true;
+      if (W_FO.test(w)) fl.fadeOut = true;
+      if (/al\s+fine/i.test(w)) fl.alFine = true;
+      if (/al\s+coda/i.test(w)) fl.alCoda = true;
     };
 
     for (const el of children(mel)) {
@@ -240,7 +259,7 @@ function convertPart(part) {
               const w = text(c);
               if (w) {
                 directions.push(w);
-                if (JUMP_WORDS.test(w)) jump = true;
+                jumpWords(w);
               }
             } else if (c.name === 'dynamics') {
               for (const d of children(c)) {
@@ -256,8 +275,10 @@ function convertPart(part) {
               const unit = BEAT_UNIT[textOf(c, 'beat-unit')];
               const per = parseFloat(textOf(c, 'per-minute'));
               if (unit && per > 0) metro = per * unit * (child(c, 'beat-unit-dot') ? 1.5 : 1);
-            } else if (c.name === 'segno' || c.name === 'coda') {
-              jump = true;
+            } else if (c.name === 'segno') {
+              fl.segno = true;
+            } else if (c.name === 'coda') {
+              fl.codaSign = true; // To Coda の印か、飛んでくる先の印か（小節の終わりで決める）
             }
           }
         }
@@ -324,6 +345,14 @@ function convertPart(part) {
     if (repeatStart) raw.repeatStart = true;
     if (repeatEnd) raw.repeatEnd = true;
     if (ending) raw.ending = [...ending];
+    if (fl.codaSign && !fl.toCoda) fl.coda = true;
+    if (fl.segno) raw.segno = true;
+    if (fl.coda) raw.coda = true;
+    if (fl.toCoda) raw.toCoda = true;
+    if (fl.fine) raw.fine = true;
+    if (fl.jump) raw.jump = fl.jump;
+    if (fl.jump && fl.fadeOut) raw.fadeOut = true;
+    raw._al = { fine: fl.alFine, coda: fl.alCoda };
     if (chords.length) raw.chords = chords;
     const seen = new Set();
     const dirs = directions.filter((d) => {
@@ -339,6 +368,8 @@ function convertPart(part) {
     raws.push(raw);
     info.push({ rehearsal, repeatStart, repeatEnd, doubleEnd, pickup: index === 0 && !!ticks });
   });
+
+  checkJumps(raws);
 
   // 小節番号：数字で、重ならず、増えていくならそのまま。そうでなければ振り直す
   const nums = raws.map((r) => Number(r.number));
@@ -380,7 +411,35 @@ function convertPart(part) {
     return { ...o, ...rest };
   });
 
-  return { measures, sections: makeSections(measures, info), maxStaves, extraStaff, jump };
+  return { measures, sections: makeSections(measures, info), maxStaves, extraStaff };
+}
+
+/**
+ * もどる・飛ぶ記号で、行き先が見つからないものを確認メモにする（その記号は使わずに先へ進む）
+ * @param {any[]} raws
+ */
+function checkJumps(raws) {
+  const addWarn = (r, w) => (r.warn = r.warn ? `${r.warn} ／ ${w}` : w);
+  const hasJump = raws.some((r) => r.jump);
+  raws.forEach((r, i) => {
+    if (r.jump === 'ds' && !raws.some((x) => x.segno)) {
+      addWarn(r, 'D.S.（𝄋 にもどる）がありますが、𝄋 の印が見つかりません。もどらずに先へ進みます。');
+      delete r.jump;
+      delete r.fadeOut;
+    }
+    if (r.toCoda && !raws.some((x, k) => k > i && x.coda)) {
+      addWarn(r, 'To Coda がありますが、飛んでいく先の Coda の印が見つかりません。飛ばずに先へ進みます。');
+      delete r.toCoda;
+    }
+    if (r.jump && r._al.fine && !raws.some((x) => x.fine)) addWarn(r, '「al Fine」とありますが、Fine（終わり）の印が見つかりません。もどったあとは、曲の最後まで弾きます。');
+    if (r.jump && r._al.coda && !raws.some((x) => x.toCoda)) addWarn(r, '「al Coda」とありますが、To Coda の印が見つかりません。もどったあとは、曲の最後まで弾きます。');
+    if (!hasJump && (r.toCoda || r.fine)) {
+      addWarn(r, `${r.toCoda ? 'To Coda' : 'Fine'} がありますが、D.S.・D.C.（もどる記号）が見つかりません。この印は使わずに進みます。`);
+      delete r.toCoda;
+      delete r.fine;
+    }
+    delete r._al;
+  });
 }
 
 /** 同じ手で、始まりと長さが同じ音を1つの和音（イベント）にまとめる */
