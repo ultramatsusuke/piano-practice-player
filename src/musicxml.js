@@ -351,7 +351,7 @@ function convertPart(part) {
     if (fl.toCoda) raw.toCoda = true;
     if (fl.fine) raw.fine = true;
     if (fl.jump) raw.jump = fl.jump;
-    if (fl.jump && fl.fadeOut) raw.fadeOut = true;
+    if (fl.fadeOut && (fl.jump || repeatEnd)) raw.fadeOut = true; // D.S. & F.O.・Repeat & F.O.
     raw._al = { fine: fl.alFine, coda: fl.alCoda };
     if (chords.length) raw.chords = chords;
     const seen = new Set();
@@ -425,7 +425,7 @@ function checkJumps(raws) {
     if (r.jump === 'ds' && !raws.some((x) => x.segno)) {
       addWarn(r, 'D.S.（𝄋 にもどる）がありますが、𝄋 の印が見つかりません。もどらずに先へ進みます。');
       delete r.jump;
-      delete r.fadeOut;
+      if (!r.repeatEnd) delete r.fadeOut;
     }
     if (r.toCoda && !raws.some((x, k) => k > i && x.coda)) {
       addWarn(r, 'To Coda がありますが、飛んでいく先の Coda の印が見つかりません。飛ばずに先へ進みます。');

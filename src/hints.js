@@ -24,6 +24,7 @@ function flowHints(song, mi, hands) {
   }
   if (m.jump === 'dc') out.push('D.C.（ダ・カーポ）：この小節を弾いたら、曲の最初にもどります');
   if (m.jump && m.fadeOut) out.push('もどったあとは、音をだんだん小さくして終わります（F.O.）');
+  if (m.repeatEnd && m.fadeOut && !m.jump) out.push('くり返して（Repeat）もどったあとは、音をだんだん小さくして終わります（F.O.）');
   if (m.toCoda) {
     const c = ms.findIndex((x, k) => k > mi && x.coda);
     if (c >= 0) out.push(`To Coda：もどったあとは、この小節のあと Coda（${no(c)}）へ飛びます`);
@@ -39,7 +40,8 @@ function flowHints(song, mi, hands) {
       const oct = octaveShift(m, ons[0].pass, /** @type {'rh'|'lh'} */ (h));
       const how = `${label}を${Math.abs(oct)}オクターブ${oct > 0 ? '上' : '下'}で弾きます（${OCT_NAME[oct]}）`;
       const when = ons.length === occ.length ? '' : ons.map((o) => `${o.n}回目`).join('と') + 'は、';
-      out.push(when + how);
+      const part = m.octave.from > 0 || m.octave.to != null ? '（小節の中の「8va」の点線の所だけ）' : '';
+      out.push(when + how + part);
     }
   }
   return out;

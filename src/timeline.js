@@ -49,9 +49,10 @@ export function playOrder(song) {
     const n = (count.get(i) || 0) + 1;
     count.set(i, n);
     order.push({ mi: i, pass, n, ret, fade });
+    if (fade && i === fadeEnd) break; // F.O. の終わり
     if (ret) {
-      // もどったあと：Fine・F.O. の終わりで終わる。To Coda なら Coda へ
-      if (m.fine || (fade && i === fadeEnd)) break;
+      // もどったあと：Fine で終わる。To Coda なら Coda へ
+      if (m.fine) break;
       if (m.toCoda && !codaDone) {
         const c = ms.findIndex((x, k) => k > i && x.coda);
         if (c >= 0) {
@@ -69,6 +70,11 @@ export function playOrder(song) {
       if (pass < total && done < total - 1) {
         jumped.set(i, done + 1);
         pass++;
+        // Repeat & F.O.：最後の回は、くり返しの頭からだんだん小さくして終わる
+        if (m.fadeOut && pass === total) {
+          fade = true;
+          fadeEnd = fadeRegionEnd(song, startIdx);
+        }
         i = startIdx;
         viaJump = true;
         continue;
@@ -81,7 +87,7 @@ export function playOrder(song) {
         jumpsDone.add(i);
         ret = m.jump;
         fade = m.fadeOut;
-        fadeEnd = fade ? sectionEnd(song, target) : -1;
+        fadeEnd = fade ? fadeRegionEnd(song, target) : -1;
         i = target;
         continue;
       }
@@ -98,10 +104,19 @@ export function findSegno(ms, i) {
   return ms.findIndex((x) => x.segno);
 }
 
-/** その小節が入っているセクションの最後の小節の index */
-function sectionEnd(song, i) {
-  const s = song.sections.find((x) => i >= x.from && i <= x.to);
-  return s ? s.to : song.measures.length - 1;
+const FADE_MIN_BARS = 8;
+
+/**
+ * F.O. で、だんだん小さくして終わる最後の小節の index。
+ * もどった先のセクションの終わりまで。短すぎる（8小節より少ない）ときは、次のセクションの終わりまでのばす
+ */
+function fadeRegionEnd(song, i) {
+  const secs = song.sections;
+  let k = secs.findIndex((x) => i >= x.from && i <= x.to);
+  if (k < 0) return song.measures.length - 1;
+  let end = secs[k].to;
+  while (end - i + 1 < FADE_MIN_BARS && k + 1 < secs.length) end = secs[++k].to;
+  return end;
 }
 
 /**
@@ -139,10 +154,12 @@ function lastPassAt(ms, i) {
  * @param {Measure} m
  * @param {number} pass
  * @param {'rh'|'lh'} hand
+ * @param {number} [t] 音の始まり（小節内の tick）。省くと、その小節でずらすかどうかだけを見る
  */
-export function octaveShift(m, pass, hand) {
+export function octaveShift(m, pass, hand, t) {
   const o = m.octave;
   if (!o || (o.passes && !o.passes.includes(pass))) return 0;
+  if (t !== undefined && (t < o.from || (o.to != null && t >= o.to))) return 0;
   return o[hand];
 }
 
@@ -270,8 +287,8 @@ export function buildSchedule(song, order, ratio) {
   items.forEach((it, idx) => {
     const m = song.measures[it.mi];
     for (const hand of /** @type {const} */ (['rh', 'lh'])) {
-      const sh = octaveShift(m, it.pass, hand) * 12;
       for (const ev of m[hand]) {
+        const sh = octaveShift(m, it.pass, hand, ev.t) * 12;
         const startMs = it.startMs + it.tickToMs(ev.t);
         const endMs = it.startMs + it.tickToMs(ev.t + ev.d);
         for (const n0 of ev.notes) {

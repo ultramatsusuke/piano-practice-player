@@ -120,22 +120,33 @@ test('D.C. al Fine・D.S. al Coda', () => {
 });
 
 test('F.O.：もどった先のセクションの終わりまで、だんだん小さくして終わる', () => {
-  const s = flowSong([{}, { segno: true }, {}, {}, { jump: 'ds', fadeOut: true }], [
+  // 𝄋 は 2小節目。A は 2〜9（8小節）、B は 10〜11
+  const marks = Array.from({ length: 11 }, () => ({}));
+  marks[1].segno = true;
+  marks[10] = { jump: 'ds', fadeOut: true };
+  const s = flowSong(marks, [
+    { name: 'イントロ', from: 1, to: 1 },
+    { name: 'A', from: 2, to: 9 },
+    { name: 'B', from: 10, to: 11 },
+  ]);
+  const order = playOrder(s);
+  assert.deepEqual(mis(order), [0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 1, 2, 3, 4, 5, 6, 7, 8]);
+  assert.deepEqual(order.map((o) => o.fade), [...Array(11).fill(false), ...Array(8).fill(true)]);
+  const sch = buildSchedule(s, order, 1);
+  const gains = sch.notes.map((n) => n.gain);
+  assert.deepEqual(gains.slice(0, 11), Array(11).fill(1));
+  // 区間の頭は 1 のまま、そのあと小さくなる
+  assert.equal(gains[11], 1);
+  assert.ok(gains[18] < 0.2 && gains[18] > 0);
+  // 1小節のくり返し（この小節だけ）は、だんだん小さくしない
+  assert.equal(buildSchedule(s, [{ ...order[18], fade: false }], 1).notes[0].gain, 1);
+  // セクションが短い（8小節より少ない）ときは、次のセクションの終わりまでのばす（ここでは曲の終わりまで）
+  const short = flowSong([{}, { segno: true }, {}, {}, { jump: 'ds', fadeOut: true }], [
     { name: 'イントロ', from: 1, to: 1 },
     { name: 'A', from: 2, to: 3 },
     { name: 'B', from: 4, to: 5 },
   ]);
-  const order = playOrder(s);
-  assert.deepEqual(mis(order), [0, 1, 2, 3, 4, 1, 2]);
-  assert.deepEqual(order.map((o) => o.fade), [false, false, false, false, false, true, true]);
-  const sch = buildSchedule(s, order, 1);
-  const gains = sch.notes.map((n) => n.gain);
-  assert.deepEqual(gains.slice(0, 5), [1, 1, 1, 1, 1]);
-  // 区間の頭は 1 のまま、そのあと小さくなる
-  assert.equal(gains[5], 1);
-  assert.ok(gains[6] < 0.2 && gains[6] > 0);
-  // 1小節のくり返し（この小節だけ）は、だんだん小さくしない
-  assert.equal(buildSchedule(s, [{ ...order[6], fade: false }], 1).notes[0].gain, 1);
+  assert.deepEqual(mis(playOrder(short)), [0, 1, 2, 3, 4, 1, 2, 3, 4]);
 });
 
 test('2回目だけ 8va：その回だけ1オクターブ上で鳴らす', () => {
@@ -154,4 +165,36 @@ test('曲ファイルの jump・octave の書き方がおかしいときは、�
   assert.throws(() => flowSong([{ jump: 'segno' }]), /「jump」が読めません/);
   assert.throws(() => flowSong([{ octave: { rh: 'up' } }]), /「octave」/);
   assert.throws(() => flowSong([{ octave: { rh: 1, passes: [0] } }]), /「octave」/);
+});
+
+test('Repeat & F.O.：くり返しの最後の回を、だんだん小さくして終わる（短いセクションは次のセクションまで）', () => {
+  // |: 1 2 | 3 … 10 | 11 :| F.O.   セクション：1〜2（2小節）、3〜10、11
+  const marks = Array.from({ length: 11 }, () => ({}));
+  marks[0].repeatStart = true;
+  marks[10] = { repeatEnd: true, fadeOut: true };
+  const s = flowSong(marks, [
+    { name: 'C', from: 1, to: 2 },
+    { name: 'B', from: 3, to: 10 },
+    { name: 'D', from: 11, to: 11 },
+  ]);
+  const order = playOrder(s);
+  // 1回目は全部、2回目は 1〜10（8小節に足りるまでセクションをのばす）でおしまい
+  assert.deepEqual(mis(order), [0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 0, 1, 2, 3, 4, 5, 6, 7, 8, 9]);
+  assert.ok(order.slice(0, 11).every((o) => !o.fade));
+  assert.ok(order.slice(11).every((o) => o.fade && o.pass === 2));
+  const gains = buildSchedule(s, order, 1).notes.map((n) => n.gain);
+  assert.ok(gains[11] === 1 && gains[20] < gains[15] && gains[15] < 1);
+});
+
+test('小節の途中までの 8va（octave.to）', () => {
+  const raw = {
+    format: 'piano-practice-song', formatVersion: 1, title: 't', ticksPerQuarter: 480,
+    measures: [{ number: 1, time: [4, 4], tempo: 120, octave: { rh: 1, to: 960 },
+      rh: [{ t: 0, d: 960, notes: [{ p: 'A5' }] }, { t: 960, d: 960, notes: [{ p: 'C5' }] }] }],
+  };
+  const s = normalizeSong(raw);
+  assert.deepEqual(buildSchedule(s, playOrder(s), 1).notes.map((n) => n.midi), [93, 72]);
+  assert.equal(octaveShift(s.measures[0], 1, 'rh', 0), 1);
+  assert.equal(octaveShift(s.measures[0], 1, 'rh', 960), 0);
+  assert.throws(() => normalizeSong({ ...raw, measures: [{ ...raw.measures[0], octave: { rh: 1, from: 960, to: 480 } }] }), /「octave」/);
 });

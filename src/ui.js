@@ -82,9 +82,10 @@ function selIndex() {
 function occLabel(mi, n) {
   return occurrences(mi).length > 1 ? `（${n}回目）` : '';
 }
-/** その回に、両手の音を何オクターブずらすか */
+/** その回に、両手の音を何オクターブずらすか（from・to は小節の中のずらす範囲。tick） */
 function shiftOf(m, pass) {
-  return { rh: octaveShift(m, pass, 'rh'), lh: octaveShift(m, pass, 'lh') };
+  const o = m.octave;
+  return { rh: octaveShift(m, pass, 'rh'), lh: octaveShift(m, pass, 'lh'), from: o ? o.from : 0, to: o && o.to != null ? o.to : m.lengthTicks };
 }
 
 function updateSum() {
@@ -147,7 +148,7 @@ function drawFrame(item, local) {
   if (state.hand !== 'R') {
     for (const e of m.lh) {
       if (local >= e.t && local < e.t + e.d) {
-        e.notes.forEach((n) => kb.L.mark(n.midi + sh.lh * 12, LC, n.f));
+        e.notes.forEach((n) => kb.L.mark(n.midi + octaveShift(m, item.pass, 'lh', e.t) * 12, LC, n.f));
         lt = '左手：' + noteNames(e.notes);
       }
     }
@@ -160,7 +161,7 @@ function drawFrame(item, local) {
     for (const e of m.rh) {
       if (local >= e.t && local < e.t + e.d) {
         found = true;
-        e.notes.forEach((n) => kb.R.mark(n.midi + sh.rh * 12, RC, n.f));
+        e.notes.forEach((n) => kb.R.mark(n.midi + octaveShift(m, item.pass, 'rh', e.t) * 12, RC, n.f));
         const t = item.pass === 2 && e.ly[1] ? e.ly[1] : e.ly[0];
         const fg = fingers(e.notes);
         rt = 'いま：' + noteNames(e.notes) + (fg ? `（右手 ${fg}）` : '') + (e.tiedIn ? '　つづき（弾き直さない）' : '') + (t ? `　歌詞「${t}」` : '');
