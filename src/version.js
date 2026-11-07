@@ -1,7 +1,12 @@
 // バージョンと変更履歴（画面右上のバージョン表示から見られる）
-export const VERSION = '0.9.2';
+export const VERSION = '0.9.3';
 
 export const CHANGELOG = [
+  {
+    version: '0.9.3',
+    date: '2026-11-07',
+    items: ['左手などの低い音が、iPhone のスピーカーでも聞こえやすくなるように、音色と音量を変えました'],
+  },
   {
     version: '0.9.2',
     date: '2026-11-07',

@@ -62,7 +62,7 @@ export class Player {
         if (at >= pos - 50) {
           const sec = (n.endMs - n.startMs) / 1000;
           if (n.hand === 'rh') audio.note(n.midi, songT0 + at / 1000, Math.max(0.25, sec * 0.95), 0.16);
-          else audio.note(n.midi, songT0 + at / 1000, Math.min(2.2, sec), 0.1);
+          else audio.note(n.midi, songT0 + at / 1000, Math.min(2.2, sec), 0.14);
         }
         ni++;
       }

@@ -94,11 +94,45 @@ export function unlock() {
   }
 }
 
+// 低い音は、倍音（上に重なる音）を足した形で鳴らす。
+// iPhone のスピーカーは低い音（300Hz くらいより下）がほとんど出ないので、三角波のままだと左手が聞こえない。
+// 倍音があれば、いちばん下の音が出なくても、音の高さとして聞き取れる。
+const waves = new Map();
+
+/**
+ * @param {AudioContext} a
+ * @param {number} midi
+ * @returns {PeriodicWave|null} null なら今までどおりの三角波
+ */
+function waveFor(a, midi) {
+  const mix = Math.min(1, (64 - midi) / 12); // ミ（E4）から上は三角波のまま。下にいくほど倍音を足す
+  if (mix <= 0) return null;
+  let w = waves.get(midi);
+  if (!w) {
+    const f0 = 440 * Math.pow(2, (midi - 69) / 12);
+    const N = 32;
+    const re = new Float32Array(N);
+    const im = new Float32Array(N);
+    for (let n = 1; n < N; n++) {
+      const tri = n % 2 ? (((n - 1) / 2) % 2 ? -1 : 1) / (n * n) : 0;
+      const rich = 1 / n / (1 + Math.pow((n * f0) / 1500, 4)); // 1500Hz より上の倍音は弱める
+      im[n] = (1 - mix) * tri + mix * rich;
+    }
+    w = a.createPeriodicWave(re, im);
+    waves.set(midi, w);
+  }
+  return w;
+}
+
+/**
+ * @param {OscillatorType|PeriodicWave} type
+ */
 function play(type, freq, when, dur, vol) {
   const a = ctx();
   const o = a.createOscillator();
   const g = a.createGain();
-  o.type = type;
+  if (typeof type === 'string') o.type = type;
+  else o.setPeriodicWave(type);
   o.frequency.value = freq;
   g.gain.setValueAtTime(vol, when);
   g.gain.exponentialRampToValueAtTime(0.001, when + dur);
@@ -122,7 +156,7 @@ function play(type, freq, when, dur, vol) {
  * @param {number} vol
  */
 export function note(midi, when, dur, vol) {
-  play('triangle', 440 * Math.pow(2, (midi - 69) / 12), when, dur, vol);
+  play(waveFor(ctx(), midi) || 'triangle', 440 * Math.pow(2, (midi - 69) / 12), when, dur, vol);
 }
 
 /** メトロノームのクリック */

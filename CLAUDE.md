@@ -58,7 +58,7 @@ src/
   hints.js      小節ヒント（楽譜の言葉の訳など）
   timeline.js   リピート展開、テンポ表、フェルマータ、ms の予定表、カウントイン
   keyboard.js / score.js / rhythm.js   鍵盤・楽譜・リズム図の SVG
-  audio.js      三角波の音、クリック、iPhone 対策（音の有効化・マナーモード）
+  audio.js      三角波の音（E4 より下は倍音を足す。iPhone のスピーカーで低い音が聞こえるように）、クリック、iPhone 対策（音の有効化・マナーモード）
   player.js     再生ループ
   storage.js    最後に開いた曲を IndexedDB に保存
   ui.js  main.js
