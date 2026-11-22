@@ -11,7 +11,7 @@ const LOOKAHEAD_MS = 150;
  * @property {boolean} loop   true なら order をくり返す（この小節だけ）
  * @property {number} ratio   原曲に対する速さ
  * @property {'both'|'R'|'L'} hand
- * @property {(beat:number)=>void} onCount
+ * @property {(beat:number, posMs:number)=>void} onCount  posMs は曲の頭までの残り（マイナス）
  * @property {(itemIndex:number, item:import('./timeline.js').ScheduleItem, localTick:number)=>void} onFrame
  * @property {()=>void} onEnd
  */
@@ -88,7 +88,7 @@ export class Player {
       pump(pos);
       if (pos < 0) {
         const b = Math.min(ci.beats, Math.max(1, Math.floor((pos + countMs) / ci.beatMs) + 1));
-        o.onCount(((b - 1) % ci.perBar) + 1);
+        o.onCount(((b - 1) % ci.perBar) + 1, pos);
       } else {
         if (!loop && pos >= sch.totalMs) {
           // 最後の音は自然に鳴り終わらせる

@@ -50,6 +50,11 @@
       <div id="sum" class="sum"></div>
       <button class="b playbtn playtop" id="playTop">再生</button>
     </div>
+    <!-- 流れる表示（「表示」の「流れる」でオン。楽譜・リズム図・ふつうの鍵盤の代わりに出す） -->
+    <div class="flowwrap" id="wFL" style="display:none">
+      <canvas id="flow" class="flowcv" role="img" aria-label="流れてくる音"></canvas>
+      <svg id="flowkb" class="kb" viewBox="0 0 380 140" role="img"><title>鍵盤</title></svg>
+    </div>
     <div class="kbwrap" id="wKB"><svg id="kb" class="kb" viewBox="0 0 380 210" role="img"><title>鍵盤</title></svg></div>
     <div class="kbwrap" id="wSC"><svg id="score" class="kb" viewBox="0 0 380 190" role="img" style="margin-top:6px"><title>この小節の楽譜</title></svg></div>
     <div class="kbwrap" id="wTL"><svg id="tl" class="kb" viewBox="0 0 380 140" role="img" style="margin-top:4px"><title>音の長さの図</title></svg></div>
@@ -93,6 +98,7 @@
       <li><b>テンポ</b>：はじめは「ゆっくり（半分）」がおすすめです。</li>
       <li><b>再生のしかた</b>：「この小節だけ」はその小節をくり返します。「ここから最後まで」は選んだ小節から、「最初から全曲」は曲の頭から弾きます。</li>
       <li><b>表示</b>：楽譜・リズム図・ヒントを、出したり隠したりできます。ヒントは、黒い鍵盤・3連符・速さの変化・楽譜の言葉の意味などを、小節ごとに自動で出します。</li>
+      <li><b>流れる</b>：「表示」の「流れる」を押すと、音が上から流れてくる画面になります。帯が鍵盤に届いたときに、その鍵盤を弾きます。帯の長さは音の長さです。青は右手、緑は左手です。いちばん上の緑の線は、曲のどこまで進んだかです。もう一度押すと、もとの画面にもどります。iPhone を横向きにすると、鍵盤が太くなって見やすくなります。</li>
       <li><b>大きさ</b>：鍵盤・楽譜・リズム図の大きさを、20〜100 の数字で変えられます。</li>
     </ol>
     <p>「再生」を押すと、カッチ・カッチと1小節分数えてから始まります。もう一度押すと止まります。「再生」ボタンは、画面のいちばん上（選択中の表示の横）と、いちばん下の2か所にあります。どちらも同じです。</p>

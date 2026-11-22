@@ -1,7 +1,8 @@
 // 画面（ボタン・選択中の要約・説明欄・モーダル）。v0.7.0 の UI の決めごとを守る
 import { parseSongText, SongError } from './song.js';
-import { playOrder, octaveShift } from './timeline.js';
-import { buildKeyboard } from './keyboard.js';
+import { playOrder, octaveShift, countIn } from './timeline.js';
+import { buildKeyboard, buildFlowKeyboard } from './keyboard.js';
+import { buildFlowModel, nowTick, FlowView } from './flow.js';
 import { drawScore } from './score.js';
 import { drawRhythm, noteNames, fingers } from './rhythm.js';
 import { RC, LC } from './svg.js';
@@ -37,10 +38,18 @@ const state = {
   showScore: true,
   showRhythm: true,
   showHints: true,
-  SZ: { kb: 50, score: 50, rhythm: 50 },
+  flow: false, // 流れる表示
+  SZ: { kb: 50, score: 50, rhythm: 50, flow: 50 },
 };
 
 const player = new Player();
+/** @type {FlowView|null} */
+let flowView = null;
+/** 流れる表示に今出している演奏順と帯（再生ボタンを押したときと同じ演奏順） */
+let flowPlan = null;
+let flowModel = null;
+/** 曲全体の演奏順で、各小節が何 tick 目から始まるか（緑の帯の進み具合に使う） */
+let fullStartT = [0];
 let kb = buildKeyboardStub();
 let scoreView = { update() {} };
 let rhythmView = { update() {} };
@@ -90,10 +99,59 @@ function shiftOf(m, pass) {
 
 function updateSum() {
   $('sum').textContent = `選択中：${secName(state.barSel)}　${num(state.barSel)}小節目${occLabel(state.barSel, state.occ + 1)} ／ ${HN[state.hand]} ／ ${TN[state.ratio]} ／ ${MN[state.mode]}`;
+  refreshFlow(); // 選んでいる小節・手・再生のしかたが変わったら、流れる表示も描き直す
 }
 
 function rebuildKB() {
-  kb = buildKeyboard(/** @type {any} */ ($('kb')), state.hand, state.song.range);
+  if (state.flow) {
+    // 鍵盤の高さは画面で約120px まで（横向きで鍵盤ばかり大きくならないように）
+    const scale = ($('wFL').clientWidth || 360) / 380;
+    const keyH = Math.min(100, Math.max(48, 120 / scale));
+    const fk = buildFlowKeyboard(/** @type {any} */ ($('flowkb')), state.hand, state.song.range, keyH);
+    kb = { R: fk.R, L: fk.L };
+    if (flowView) flowView.setLayout(fk.layout);
+  } else {
+    kb = buildKeyboard(/** @type {any} */ ($('kb')), state.hand, state.song.range);
+  }
+}
+
+/**
+ * 再生ボタンを押したときの演奏順（流れる表示の止まった絵にも使う）
+ * @returns {{order: import('./timeline.js').OrderItem[], loop: boolean, fullStart: number}}
+ *   fullStart は、曲全体の演奏順の何番目から始まるか
+ */
+function playPlan() {
+  const full = state.order;
+  if (state.mode === 'all') return { order: full, loop: false, fullStart: 0 };
+  let k = selIndex();
+  if (k < 0) k = 0;
+  if (state.mode === 'bar') return { order: [{ ...full[k], fade: false }], loop: true, fullStart: k }; // 1小節のくり返しは、だんだん小さくしない
+  return { order: full.slice(k), loop: false, fullStart: k };
+}
+
+/** 曲全体の中の進み具合（0〜1）。idx は今の演奏順の何番目か */
+function progressAt(plan, idx, localTick) {
+  const total = fullStartT[fullStartT.length - 1] || 1;
+  const k = Math.min(plan.fullStart + (plan.loop ? 0 : idx), fullStartT.length - 2);
+  return Math.max(0, (fullStartT[k] + localTick) / total);
+}
+
+/** 流れる表示を、今の選択で作り直して、止まった絵を描く（再生中は何もしない） */
+function refreshFlow() {
+  if (!state.flow || !state.song || !flowView || player.playing) return;
+  flowPlan = playPlan();
+  flowModel = buildFlowModel(state.song, flowPlan.order, flowPlan.loop, state.hand);
+  flowView.setModel(flowModel);
+  flowView.draw(0, progressAt(flowPlan, 0, 0), false);
+}
+
+/** 「表示」の「流れる」：楽譜・リズム図・ふつうの鍵盤と、流れる表示を入れ替える */
+function applyViews() {
+  $('wFL').style.display = state.flow ? '' : 'none';
+  $('wKB').style.display = state.flow ? 'none' : '';
+  $('wSC').style.display = !state.flow && state.showScore ? '' : 'none';
+  $('wTL').style.display = !state.flow && state.showRhythm ? '' : 'none';
+  if (state.flow && flowView) flowView.resize();
 }
 
 /**
@@ -189,33 +247,30 @@ function stopPlay() {
   clearPlay();
   setPlayLabel('再生');
   idleInfo(state.shown);
+  refreshFlow(); // 流れる表示は、選んでいる小節の絵にもどす
 }
 
 function startPlay() {
   audio.unlock();
-  const full = state.order;
-  let order;
-  let loop = false;
-  if (state.mode === 'all') order = full;
-  else {
-    let k = selIndex();
-    if (k < 0) k = 0;
-    if (state.mode === 'bar') {
-      order = [{ ...full[k], fade: false }]; // 1小節のくり返しは、だんだん小さくしない
-      loop = true;
-    } else order = full.slice(k);
-  }
+  refreshFlow(); // 流れる表示を、これから弾く演奏順で作っておく
+  const plan = playPlan();
+  const { order, loop } = plan;
   showBar(order[0].mi, order[0].pass);
   let lastItem = -1;
+  // カウント中の流れる表示：曲の頭までの残りを tick に直す（最初の小節の拍で数える）
+  const m0 = state.song.measures[order[0].mi];
+  const ci = countIn(m0, state.ratio);
+  const beatT = (state.song.tpq * 4) / m0.time[1];
   player.start({
     song: state.song,
     order,
     loop,
     ratio: state.ratio,
     hand: state.hand,
-    onCount(beat) {
+    onCount(beat, posMs) {
       const mi = order[0].mi;
       $('info').innerHTML = `<div style="font-weight:500">カウント　${beat}</div><div style="color:var(--text-secondary);font-size:14px">${esc(secName(mi))}　${esc(num(mi))}小節目${esc(occLabel(mi, order[0].n))}から始まります</div>`;
+      if (state.flow && flowView && flowModel) flowView.draw((posMs / ci.beatMs) * beatT, progressAt(plan, 0, 0));
     },
     onFrame(idx, item, local) {
       if (idx !== lastItem) {
@@ -223,6 +278,7 @@ function startPlay() {
         lastItem = idx;
       }
       drawFrame(item, local);
+      if (state.flow && flowView && flowModel) flowView.draw(nowTick(flowModel, idx, local), progressAt(plan, idx, local));
     },
     onEnd() {
       stopPlay();
@@ -285,7 +341,7 @@ function updateModes() {
 }
 function updateViews() {
   viewBtns.forEach((o) => {
-    const on = o.v === 'score' ? state.showScore : o.v === 'rhythm' ? state.showRhythm : state.showHints;
+    const on = { score: state.showScore, rhythm: state.showRhythm, hints: state.showHints, flow: state.flow }[o.v];
     o.el.className = 'b' + (on ? ' on' : '');
   });
 }
@@ -331,6 +387,12 @@ function updateOccs() {
 
 function applySizes() {
   [['wKB', 'kb'], ['wSC', 'score'], ['wTL', 'rhythm']].forEach(([id, k]) => ($(id).style.width = state.SZ[k] + '%'));
+  // 流れる表示は横幅いっぱい。数値で高さを変える（50 で画面の高さの約45%）
+  $('flow').style.height = state.SZ.flow * 0.9 + 'vh';
+  if (state.flow && flowView) {
+    flowView.resize();
+    flowView.redraw();
+  }
 }
 function clampSz(v) {
   return Math.min(100, Math.max(20, Math.round(v)));
@@ -362,19 +424,30 @@ function buildStaticControls() {
     updateModes();
     updateSum();
   });
-  viewBtns = mkBtns('views', [{ t: '楽譜', v: 'score' }, { t: 'リズム図', v: 'rhythm' }, { t: 'ヒント', v: 'hints' }], (v) => {
+  viewBtns = mkBtns('views', [{ t: '楽譜', v: 'score' }, { t: 'リズム図', v: 'rhythm' }, { t: 'ヒント', v: 'hints' }, { t: '流れる', v: 'flow' }], (v) => {
+    if (v === 'flow') {
+      // 鍵盤を作り直すので、再生中なら止める
+      if (player.playing) stopPlay();
+      state.flow = !state.flow;
+      applyViews();
+      if (state.song) {
+        rebuildKB();
+        refreshFlow();
+      }
+      updateViews();
+      return;
+    }
     if (v === 'score') state.showScore = !state.showScore;
     else if (v === 'rhythm') state.showRhythm = !state.showRhythm;
     else state.showHints = !state.showHints;
-    $('wSC').style.display = state.showScore ? '' : 'none';
-    $('wTL').style.display = state.showRhythm ? '' : 'none';
+    applyViews();
     if (v === 'hints' && state.song && !player.playing) idleInfo(state.shown);
     updateViews();
   });
 
   const box = $('sizes');
   box.replaceChildren();
-  [['kb', '鍵盤'], ['score', '楽譜'], ['rhythm', 'リズム図']].forEach(([key, label]) => {
+  [['kb', '鍵盤'], ['score', '楽譜'], ['rhythm', 'リズム図'], ['flow', '流れる']].forEach(([key, label]) => {
     const row = document.createElement('div');
     row.className = 'srow';
     const nm = document.createElement('span');
@@ -421,6 +494,7 @@ function buildStaticControls() {
     setSz('kb', v);
     setSz('score', v);
     setSz('rhythm', v);
+    setSz('flow', v);
   });
 
   const togglePlay = () => {
@@ -448,6 +522,8 @@ function openSongText(text, fileName, save) {
   if (player.playing) stopPlay();
   state.song = song;
   state.order = playOrder(song);
+  fullStartT = [0];
+  for (const o of state.order) fullStartT.push(fullStartT[fullStartT.length - 1] + song.measures[o.mi].lengthTicks);
   state.barSel = song.sections[0].from;
   state.occ = 0;
   state.shown = state.barSel;
@@ -569,12 +645,23 @@ function buildModals() {
 export async function init() {
   audio.setupAudioSession();
   buildModals();
+  flowView = new FlowView(/** @type {HTMLCanvasElement} */ ($('flow')));
   buildStaticControls();
   updateHands();
   updateTempos();
   updateModes();
   updateViews();
   applySizes();
+  // 画面の向き・大きさが変わったら、流れる表示を描き直す
+  const onResize = () => {
+    if (!state.flow || !flowView) return;
+    if (state.song) rebuildKB(); // 鍵盤の高さを画面の幅に合わせ直す
+    flowView.resize();
+    flowView.redraw();
+  };
+  window.addEventListener('resize', onResize);
+  window.addEventListener('orientationchange', () => setTimeout(onResize, 200));
+  if (window.matchMedia) window.matchMedia('(prefers-color-scheme: dark)').addEventListener?.('change', onResize);
 
   const fileInput = /** @type {HTMLInputElement} */ ($('file'));
   const pick = () => fileInput.click();

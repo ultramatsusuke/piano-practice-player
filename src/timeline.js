@@ -1,4 +1,5 @@
 // 演奏順（リピート展開）と、時間（ms）の予定表
+import { doremi } from './pitch.js';
 /** @typedef {import('./song.js').Song} Song */
 /** @typedef {import('./song.js').Measure} Measure */
 
@@ -255,6 +256,8 @@ export function measureClock(song, m, ratio) {
  * @property {number} endMs
  * @property {number} item  items の番号
  * @property {number} gain  音量の倍率（ふだんは 1。F.O. の区間でだんだん小さくなる）
+ * @property {string} name  ドレミの名前（流れる表示に書く）
+ * @property {number|null} f  指番号
  */
 
 /**
@@ -302,7 +305,7 @@ export function buildSchedule(song, order, ratio) {
             continue;
           }
           open.delete(key);
-          const sn = { hand, midi: n.midi, startMs, endMs, item: idx, gain: gainAt(it, startMs) };
+          const sn = { hand, midi: n.midi, startMs, endMs, item: idx, gain: gainAt(it, startMs), name: doremi(n0), f: n0.f ?? null };
           notes.push(sn);
           if (n.tie === 'start' || n.tie === 'continue') open.set(key, sn);
         }
