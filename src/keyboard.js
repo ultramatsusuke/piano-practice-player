@@ -57,8 +57,10 @@ function buildRow(parent, yOff, lo, hi, title, color, big, TOP = 18) {
   const g = mk(parent, 'g', { transform: `translate(0,${yOff})` });
   const lay = keyLayout(lo, hi);
   const { WK, BW, whites: wl } = lay;
-  const WH = typeof big === 'number' ? big : big ? 100 : 62;
-  const BH = Math.round(WH * 0.645);
+  const flowRow = typeof big === 'number'; // 流れる表示の鍵盤
+  const WH = flowRow ? big : big ? 100 : 62;
+  // 黒鍵の長さ：ふつうは本物のピアノに近い白鍵の約2/3。流れる表示では約1/3にして、白鍵の所を広く見せる
+  const BH = Math.round(WH * (flowRow ? 0.33 : 0.645));
   const CR = WH >= 80 ? 9 : 7.5;
   const FS = Math.min(11, WK * 0.75); // 音名の文字（鍵盤が細いときは小さく）
   if (title) tx(g, KX0, 11, 12, color, title, 500, 'start').setAttribute('dominant-baseline', 'auto');
@@ -77,7 +79,6 @@ function buildRow(parent, yOff, lo, hi, title, color, big, TOP = 18) {
   // 押された鍵盤の色は、音名の文字の上に重ねる（音名は mark の中で白い文字で書き直す）
   const ov = mk(g, 'g', {});
   // 「真ん中のド」の文字（流れる表示では小さくして、鍵盤の下をつめる）
-  const flowRow = typeof big === 'number';
   if (lo <= 60 && hi >= 60) {
     const t = tx(g, lay.keyX(60).x + WK / 2, TOP + WH + (flowRow ? 10 : 15), flowRow ? 8 : 11, 'var(--text-muted)', '真ん中のド');
     t.setAttribute('dominant-baseline', 'auto');
@@ -93,9 +94,11 @@ function buildRow(parent, yOff, lo, hi, title, color, big, TOP = 18) {
       const cr = Math.min(CR, k.w * 0.55);
       if (k.black) {
         const cx = k.x + BW / 2;
+        // 黒鍵が短いときも、丸が鍵盤の上にはみ出さないようにする
+        const cy = TOP + Math.max(cr + 1, BH - cr - 5);
         mk(ov, 'rect', { x: k.x, y: TOP, width: BW, height: BH, rx: 2, fill: col });
-        mk(ov, 'circle', { cx, cy: TOP + BH - cr - 5, r: cr - 0.5, fill: '#fff' });
-        tx(ov, cx, TOP + BH - cr - 5, Math.min(11, cr * 1.3), col, label);
+        mk(ov, 'circle', { cx, cy, r: cr - 0.5, fill: '#fff' });
+        tx(ov, cx, cy, Math.min(11, cr * 1.3), col, label);
       } else {
         const x = k.x;
         mk(ov, 'rect', { x: x + 1, y: TOP + 1, width: WK - 2, height: WH - 2, rx: 3, fill: col });
