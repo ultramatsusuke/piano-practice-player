@@ -1,7 +1,12 @@
 // バージョンと変更履歴（画面右上のバージョン表示から見られる）
-export const VERSION = '0.11.2';
+export const VERSION = '0.11.3';
 
 export const CHANGELOG = [
+  {
+    version: '0.11.3',
+    date: '2026-11-23',
+    items: ['流れる表示の鍵盤を、黒い鍵盤の長さの分だけ短くしました'],
+  },
   {
     version: '0.11.2',
     date: '2026-11-23',

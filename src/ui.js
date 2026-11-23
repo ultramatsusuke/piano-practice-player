@@ -104,10 +104,10 @@ function updateSum() {
 
 function rebuildKB() {
   if (state.flow) {
-    // 白鍵の高さは画面で約60px（音名は流れる帯に書くので、鍵盤は短めにして流れる所を広くとる）。
-    // 横向きで鍵盤が太いときも、指番号の丸と音名が入るように 40 より低くしない
+    // 白鍵の高さは画面で約40px（音名は流れる帯に書くので、鍵盤は短めにして流れる所を広くとる）。
+    // 横向きで鍵盤が太いときも、指番号の丸と音名が入るように 36 より低くしない
     const scale = ($('wFL').clientWidth || 360) / 380;
-    const keyH = Math.min(66, Math.max(40, 60 / scale));
+    const keyH = Math.min(48, Math.max(36, 40 / scale));
     const fk = buildFlowKeyboard(/** @type {any} */ ($('flowkb')), state.hand, state.song.range, keyH);
     kb = { R: fk.R, L: fk.L };
     if (flowView) flowView.setLayout(fk.layout);

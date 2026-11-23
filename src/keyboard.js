@@ -59,8 +59,8 @@ function buildRow(parent, yOff, lo, hi, title, color, big, TOP = 18) {
   const { WK, BW, whites: wl } = lay;
   const flowRow = typeof big === 'number'; // 流れる表示の鍵盤
   const WH = flowRow ? big : big ? 100 : 62;
-  // 黒鍵の長さ：ふつうは本物のピアノに近い白鍵の約2/3。流れる表示では約1/3にして、白鍵の所を広く見せる
-  const BH = Math.round(WH * (flowRow ? 0.33 : 0.645));
+  // 黒鍵の長さ：ふつうは本物のピアノに近い白鍵の約2/3。流れる表示では白鍵を短くしてあるので、白鍵の約半分
+  const BH = Math.round(WH * (flowRow ? 0.48 : 0.645));
   const CR = WH >= 80 ? 9 : 7.5;
   const FS = Math.min(11, WK * 0.75); // 音名の文字（鍵盤が細いときは小さく）
   if (title) tx(g, KX0, 11, 12, color, title, 500, 'start').setAttribute('dominant-baseline', 'auto');
